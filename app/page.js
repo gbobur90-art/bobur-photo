@@ -76,7 +76,18 @@ export default function Home() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadPhotos() }, [loadPhotos])
+  const loadAbout = useCallback(async () => {
+    try {
+      const res = await fetch('/api/about')
+      const data = await res.json()
+      if (data && Object.keys(data).length > 0) {
+        setAbout(prev => ({ ...prev, ...data }))
+        if (data.avatarUrl) setAvatarUrl(data.avatarUrl)
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => { loadPhotos(); loadAbout() }, [loadPhotos, loadAbout])
 
   useEffect(() => {
     if (photos.length === 0) return
@@ -181,12 +192,10 @@ export default function Home() {
     reader.onload = ev => setUploadPreview(ev.target.result)
     reader.readAsDataURL(file)
 
-    // Auto-analyze with AI — only if we have password and API key configured
-    if (!adminPassword) return // нет пароля — пропускаем анализ
+    // Auto-analyze with AI — no password needed, server uses its own key
     setAnalyzing(true)
     try {
       const form = new FormData()
-      form.append('password', adminPassword)
       form.append('image', file)
       const res = await fetch('/api/analyze', { method:'POST', body:form })
       if (res.ok) {
@@ -278,7 +287,6 @@ export default function Home() {
       setBulkFiles(prev => prev.map(x => x.id===item.id ? {...x, analyzing:true} : x))
       try {
         const form = new FormData()
-        form.append('password', adminPassword)
         form.append('image', item.file)
         const res = await fetch('/api/analyze', {method:'POST', body:form})
         if (res.ok) {
@@ -1041,7 +1049,23 @@ export default function Home() {
   }
 
   function AboutEditModal() {
-    const [form,setForm]=useState({...about})
+    const [form, setForm] = useState({...about})
+    const [saving, setSaving] = useState(false)
+
+    async function saveAbout() {
+      setSaving(true)
+      try {
+        setAbout(form)
+        await fetch('/api/about', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword, about: { ...form, avatarUrl } })
+        })
+        setShowAboutEdit(false)
+      } catch { setShowAboutEdit(false) }
+      setSaving(false)
+    }
+
     return (
       <div style={MB} onClick={e=>e.target===e.currentTarget&&setShowAboutEdit(false)}>
         <div style={MBX}>
@@ -1059,7 +1083,9 @@ export default function Home() {
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1.25rem'}}>
             <button style={btnCancel} onClick={()=>setShowAboutEdit(false)}>Отмена</button>
-            <button style={btnSave} onClick={()=>{setAbout(form);setShowAboutEdit(false)}}>Сохранить</button>
+            <button style={{...btnSave,opacity:saving?0.6:1}} onClick={saveAbout} disabled={saving}>
+              {saving?'Сохраняю...':'Сохранить'}
+            </button>
           </div>
         </div>
       </div>
@@ -1109,6 +1135,12 @@ export default function Home() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
         setAvatarUrl(data.url)
+        // Save avatar URL to KV so it persists
+        await fetch('/api/about', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: adminPassword || pw, about: { ...about, avatarUrl: data.url } })
+        })
         setShowAvatarUpload(false)
       } catch(err) { alert('Ошибка: ' + err.message) }
       setSaving(false)
