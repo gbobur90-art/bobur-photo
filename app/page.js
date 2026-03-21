@@ -159,13 +159,15 @@ export default function Home() {
 
   async function checkPassword() {
     try {
-      const res = await fetch('/api/photos', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({password:adminPassword, photo:{title:'__check__',url:'',cat:'check',date:'2000-01-01'}})
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwInput })
       })
-      if (res.status===401) { setPwError('Неверный пароль'); return }
+      const data = await res.json()
+      if (res.status === 401 || data.error) { setPwError('Неверный пароль'); return }
       setIsAdmin(true)
-      setAdminPassword(pwInput) // сохраняем для последующих запросов
+      setAdminPassword(pwInput)
       setShowPwModal(false); setPwError('')
       if (pendingAction) { pendingAction(); setPendingAction(null) }
       await loadPhotos()
