@@ -1,47 +1,43 @@
 import { NextResponse } from 'next/server'
 
-const PHOTOS_KEY = 'bobur_photos'
+const KEY = 'bobur_photos_v2'
 
-async function getKV() {
+async function kv(method, path, body) {
   const url = process.env.KV_REST_API_URL
   const token = process.env.KV_REST_API_TOKEN
-  if (!url || !token) throw new Error('KV не настроен — добавь KV_REST_API_URL и KV_REST_API_TOKEN в Vercel')
-  return { url, token }
+  if (!url || !token) throw new Error('KV_REST_API_URL или KV_REST_API_TOKEN не заданы в Vercel')
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  }
+  if (body !== undefined) opts.body = JSON.stringify(body)
+  const res = await fetch(`${url}${path}`, opts)
+  const text = await res.text()
+  try { return JSON.parse(text) } catch { return { result: null } }
 }
 
 async function readPhotos() {
   try {
-    const { url, token } = await getKV()
-    const res = await fetch(`${url}/get/${PHOTOS_KEY}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store'
-    })
-    if (!res.ok) return []
-    const data = await res.json()
-    if (!data.result) return []
+    const data = await kv('GET', `/get/${KEY}`)
+    if (!data?.result) return []
     return JSON.parse(data.result)
-  } catch {
-    return []
-  }
+  } catch { return [] }
 }
 
 async function writePhotos(photos) {
-  const { url, token } = await getKV()
-  const value = JSON.stringify(photos)
-  // Upstash REST API: POST /set with body {EX: ..., value: ...}  OR simple SET via pipeline
-  const res = await fetch(`${url}/set/${PHOTOS_KEY}`, {
+  const json = JSON.stringify(photos)
+  // Upstash: POST /set/<key> with raw string body
+  const url = process.env.KV_REST_API_URL
+  const token = process.env.KV_REST_API_TOKEN
+  const res = await fetch(`${url}/set/${KEY}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(value)
+    body: JSON.stringify(json),
   })
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error('KV write error: ' + text)
-  }
-  return res.json()
+  if (!res.ok) throw new Error('KV write failed: ' + await res.text())
 }
 
 export async function GET() {
@@ -49,7 +45,7 @@ export async function GET() {
     const photos = await readPhotos()
     return NextResponse.json(photos)
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json([], { status: 200 })
   }
 }
 
@@ -58,15 +54,21 @@ export async function POST(request) {
     const body = await request.json()
     const { password, photo } = body
 
-    if (password !== process.env.ADMIN_PASSWORD) {
+    // 1. Сначала проверяем пароль
+    const adminPw = process.env.ADMIN_PASSWORD
+    if (!adminPw) {
+      return NextResponse.json({ error: 'ADMIN_PASSWORD не задан в Vercel' }, { status: 500 })
+    }
+    if (password !== adminPw) {
       return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
     }
 
-    // Password check only
-    if (photo?.title === '__check__') {
+    // 2. Если это просто проверка пароля — возвращаем ok
+    if (!photo?.url) {
       return NextResponse.json({ ok: true })
     }
 
+    // 3. Сохраняем фото
     const photos = await readPhotos()
     const newPhoto = {
       id: Date.now().toString(),
@@ -74,14 +76,13 @@ export async function POST(request) {
       desc: photo.desc || '',
       cat: photo.cat || 'Путешествия',
       date: photo.date || new Date().toISOString().split('T')[0],
-      url: photo.url || '',
-      thumb: photo.thumb || photo.url || '',
+      url: photo.url,
+      thumb: photo.thumb || photo.url,
       location: photo.location || '',
       seriesId: photo.seriesId || '',
-      likes: photo.likes || 0,
+      likes: 0,
       createdAt: new Date().toISOString(),
     }
-
     photos.unshift(newPhoto)
     await writePhotos(photos)
     return NextResponse.json(newPhoto)
@@ -99,10 +100,8 @@ export async function DELETE(request) {
     if (password !== process.env.ADMIN_PASSWORD) {
       return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
     }
-
     const photos = await readPhotos()
-    const updated = photos.filter(p => p.id !== id)
-    await writePhotos(updated)
+    await writePhotos(photos.filter(p => p.id !== id))
     return NextResponse.json({ success: true })
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 })
