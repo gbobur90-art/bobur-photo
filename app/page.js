@@ -192,11 +192,12 @@ export default function Home() {
     reader.onload = ev => setUploadPreview(ev.target.result)
     reader.readAsDataURL(file)
 
-    // Auto-analyze with AI — no password needed, server uses its own key
+    // Compress image for AI analysis (max 1MB)
     setAnalyzing(true)
     try {
+      const compressed = await compressImage(file, 800, 0.7)
       const form = new FormData()
-      form.append('image', file)
+      form.append('image', compressed, file.name)
       const res = await fetch('/api/analyze', { method:'POST', body:form })
       if (res.ok) {
         const data = await res.json()
@@ -213,6 +214,27 @@ export default function Home() {
       }
     } catch {}
     setAnalyzing(false)
+  }
+
+  // Compress image to fit API limits
+  function compressImage(file, maxSize, quality) {
+    return new Promise((resolve) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const canvas = document.createElement('canvas')
+        let w = img.width, h = img.height
+        if (w > h && w > maxSize) { h = h * maxSize / w; w = maxSize }
+        else if (h > maxSize) { w = w * maxSize / h; h = maxSize }
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+      img.src = url
+    })
   }
 
   async function doUpload() {
@@ -286,8 +308,9 @@ export default function Home() {
     const analyze = async (item) => {
       setBulkFiles(prev => prev.map(x => x.id===item.id ? {...x, analyzing:true} : x))
       try {
+        const compressed = await compressImage(item.file, 800, 0.7)
         const form = new FormData()
-        form.append('image', item.file)
+        form.append('image', compressed, item.file.name)
         const res = await fetch('/api/analyze', {method:'POST', body:form})
         if (res.ok) {
           const data = await res.json()
