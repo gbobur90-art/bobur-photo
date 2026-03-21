@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const KEY = 'bobur_photos_v2'
+const KEY = 'bobur_photos'
 
 async function kv(method, path, body) {
   const url = process.env.KV_REST_API_URL
