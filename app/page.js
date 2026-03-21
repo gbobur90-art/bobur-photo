@@ -188,53 +188,63 @@ export default function Home() {
   async function onFileSelect(e) {
     const file = e.target.files[0]; if(!file) return
     setUploadFile(file)
-    const reader = new FileReader()
-    reader.onload = ev => setUploadPreview(ev.target.result)
-    reader.readAsDataURL(file)
 
-    // Compress image for AI analysis (max 1MB)
-    setAnalyzing(true)
-    try {
-      const compressed = await compressImage(file, 800, 0.7)
-      const form = new FormData()
-      form.append('image', compressed, file.name)
-      const res = await fetch('/api/analyze', { method:'POST', body:form })
-      if (res.ok) {
-        const data = await res.json()
-        if (!data.error) {
-          setUploadForm(f => ({
-            ...f,
-            title: data.title || f.title,
-            desc: data.desc || f.desc,
-            cat: data.cat || f.cat,
-            date: data.date || f.date,
-            location: data.location || f.location,
-          }))
+    // Show preview
+    const reader = new FileReader()
+    reader.onload = async (ev) => {
+      setUploadPreview(ev.target.result)
+
+      // Analyze with AI using the base64 data
+      setAnalyzing(true)
+      try {
+        const compressed = await compressFromDataUrl(ev.target.result, 800, 0.75)
+        const blob = dataUrlToBlob(compressed)
+        const form = new FormData()
+        form.append('image', blob, file.name)
+        const res = await fetch('/api/analyze', { method:'POST', body:form })
+        if (res.ok) {
+          const data = await res.json()
+          if (!data.error) {
+            setUploadForm(f => ({
+              ...f,
+              title: data.title || f.title,
+              desc: data.desc || f.desc,
+              cat: data.cat || f.cat,
+              date: data.date || f.date,
+              location: data.location || f.location,
+            }))
+          }
         }
-      }
-    } catch {}
-    setAnalyzing(false)
+      } catch(err) { console.error('AI analyze error:', err) }
+      setAnalyzing(false)
+    }
+    reader.readAsDataURL(file)
   }
 
-  // Compress image to fit API limits
-  function compressImage(file, maxSize, quality) {
+  function compressFromDataUrl(dataUrl, maxSize, quality) {
     return new Promise((resolve) => {
       const img = new Image()
-      const url = URL.createObjectURL(file)
       img.onload = () => {
-        URL.revokeObjectURL(url)
         const canvas = document.createElement('canvas')
         let w = img.width, h = img.height
-        if (w > h && w > maxSize) { h = h * maxSize / w; w = maxSize }
-        else if (h > maxSize) { w = w * maxSize / h; h = maxSize }
+        if (w > h && w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize }
+        else if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize }
         canvas.width = w; canvas.height = h
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0, w, h)
-        canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality)
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', quality))
       }
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
-      img.src = url
+      img.onerror = () => resolve(dataUrl)
+      img.src = dataUrl
     })
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    const [header, data] = dataUrl.split(',')
+    const mime = header.match(/:(.*?);/)[1]
+    const bytes = atob(data)
+    const arr = new Uint8Array(bytes.length)
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+    return new Blob([arr], { type: mime })
   }
 
   async function doUpload() {
@@ -308,9 +318,10 @@ export default function Home() {
     const analyze = async (item) => {
       setBulkFiles(prev => prev.map(x => x.id===item.id ? {...x, analyzing:true} : x))
       try {
-        const compressed = await compressImage(item.file, 800, 0.7)
+        const compressed = await compressFromDataUrl(item.preview, 800, 0.75)
+        const blob = dataUrlToBlob(compressed)
         const form = new FormData()
-        form.append('image', compressed, item.file.name)
+        form.append('image', blob, item.file.name)
         const res = await fetch('/api/analyze', {method:'POST', body:form})
         if (res.ok) {
           const data = await res.json()
