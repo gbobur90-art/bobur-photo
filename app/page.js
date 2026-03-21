@@ -37,6 +37,9 @@ export default function Home() {
   const [pwInput, setPwInput] = useState('')
   const [pwError, setPwError] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [showAvatarUpload, setShowAvatarUpload] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState('')
   const [uploading, setUploading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [uploadMode, setUploadMode] = useState('single')
@@ -158,10 +161,12 @@ export default function Home() {
     try {
       const res = await fetch('/api/photos', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({password:pwInput, photo:{title:'__check__',url:'',cat:'check',date:'2000-01-01'}})
+        body: JSON.stringify({password:adminPassword, photo:{title:'__check__',url:'',cat:'check',date:'2000-01-01'}})
       })
       if (res.status===401) { setPwError('Неверный пароль'); return }
-      setIsAdmin(true); setShowPwModal(false); setPwError('')
+      setIsAdmin(true)
+      setAdminPassword(pwInput) // сохраняем для последующих запросов
+      setShowPwModal(false); setPwError('')
       if (pendingAction) { pendingAction(); setPendingAction(null) }
       await loadPhotos()
     } catch { setPwError('Ошибка соединения') }
@@ -178,7 +183,7 @@ export default function Home() {
     setAnalyzing(true)
     try {
       const form = new FormData()
-      form.append('password', pwInput)
+      form.append('password', adminPassword)
       form.append('image', file)
       const res = await fetch('/api/analyze', { method:'POST', body:form })
       if (res.ok) {
@@ -209,7 +214,7 @@ export default function Home() {
       }
 
       const imgForm = new FormData()
-      imgForm.append('password', pwInput)
+      imgForm.append('password', adminPassword)
       imgForm.append('image', uploadFile)
       imgForm.append('title', uploadForm.title)
       const imgRes = await fetch('/api/upload', {method:'POST', body:imgForm})
@@ -222,7 +227,7 @@ export default function Home() {
 
       const metaRes = await fetch('/api/photos', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({password:pwInput, photo:{
+        body: JSON.stringify({password:adminPassword, photo:{
           title: uploadForm.title, desc: fullDesc, cat: uploadForm.cat,
           date: uploadForm.date, url: imgData.url, thumb: imgData.thumb,
           location: uploadForm.location, likes: 0, seriesId
@@ -268,7 +273,7 @@ export default function Home() {
       setBulkFiles(prev => prev.map(x => x.id===item.id ? {...x, analyzing:true} : x))
       try {
         const form = new FormData()
-        form.append('password', pwInput)
+        form.append('password', adminPassword)
         form.append('image', item.file)
         const res = await fetch('/api/analyze', {method:'POST', body:form})
         if (res.ok) {
@@ -317,7 +322,7 @@ export default function Home() {
       try {
         setBulkFiles(prev => prev.map(x => x.id===item.id ? {...x, status:'uploading'} : x))
         const imgForm = new FormData()
-        imgForm.append('password', pwInput)
+        imgForm.append('password', adminPassword)
         imgForm.append('image', item.file)
         imgForm.append('title', item.form.title)
         const imgRes = await fetch('/api/upload', {method:'POST', body:imgForm})
@@ -330,7 +335,7 @@ export default function Home() {
 
         const metaRes = await fetch('/api/photos', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({password:pwInput, photo:{
+          body: JSON.stringify({password:adminPassword, photo:{
             title:item.form.title, desc:fullDesc, cat:item.form.cat,
             date:item.form.date, url:imgData.url, thumb:imgData.thumb,
             location:item.form.location, likes:0, seriesId
@@ -693,7 +698,16 @@ export default function Home() {
     <div style={{minHeight:'100vh',background:BG,color:TXT,fontFamily:"'Jost',sans-serif",fontWeight:300,overflowY:'auto'}}>
       <Nav solid={true}/>
       <div style={{maxWidth:900,margin:'0 auto',padding:'calc(64px + 3rem) 3rem 5rem',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'5rem',alignItems:'start'}}>
-        <div style={{aspectRatio:'3/4',background:'linear-gradient(160deg,#1a1a2e,#0f3460 60%,#1c0a00)'}}/>
+        {/* Avatar */}
+        <div style={{aspectRatio:'3/4',position:'relative',overflow:'hidden',background:'linear-gradient(160deg,#1a1a2e,#0f3460 60%,#1c0a00)'}}>
+          {avatarUrl && <img src={avatarUrl} alt={about.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
+          {isAdmin && (
+            <button onClick={()=>setShowAvatarUpload(true)}
+              style={{position:'absolute',bottom:16,left:'50%',transform:'translateX(-50%)',padding:'7px 18px',fontSize:'0.65rem',letterSpacing:'0.15em',textTransform:'uppercase',background:'rgba(10,10,10,0.75)',backdropFilter:'blur(4px)',border:`1px solid ${C}`,color:C,cursor:'pointer',borderRadius:2,whiteSpace:'nowrap'}}>
+              {avatarUrl ? '✏ Сменить фото' : '+ Фото профиля'}
+            </button>
+          )}
+        </div>
         <div>
           <div style={{fontSize:'0.62rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:'1.2rem'}}>Об авторе</div>
           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'clamp(2.2rem,4vw,3.2rem)',fontWeight:300,lineHeight:1.1,marginBottom:'2rem'}}>
@@ -721,16 +735,12 @@ export default function Home() {
               style={{padding:'9px 24px',fontSize:'0.7rem',letterSpacing:'0.18em',textTransform:'uppercase',border:'1px solid rgba(232,226,217,0.2)',background:'transparent',color:MUT,cursor:'pointer',borderRadius:2}}>
               Редактировать
             </button>
-            <button onClick={()=>requireAdmin('upload',()=>setShowUpload(true))}
-              style={{padding:'9px 24px',fontSize:'0.7rem',letterSpacing:'0.18em',textTransform:'uppercase',border:'none',background:C,color:BG,cursor:'pointer',borderRadius:2,fontWeight:400}}>
-              + Добавить фото
-            </button>
           </div>
         </div>
       </div>
       {showPwModal&&<PwModal/>}
       {showAboutEdit&&<AboutEditModal/>}
-      {showUpload&&<UploadModal/>}
+      {showAvatarUpload&&<AvatarUploadModal/>}
     </div>
   )
 
@@ -1047,6 +1057,65 @@ export default function Home() {
           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1.25rem'}}>
             <button style={btnCancel} onClick={()=>setShowAboutEdit(false)}>Отмена</button>
             <button style={btnSave} onClick={()=>{setAbout(form);setShowAboutEdit(false)}}>Сохранить</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══ AVATAR UPLOAD MODAL ═══
+  function AvatarUploadModal() {
+    const [file, setFile] = useState(null)
+    const [preview, setPreview] = useState(avatarUrl || null)
+    const [saving, setSaving] = useState(false)
+
+    function onPick(e) {
+      const f = e.target.files[0]; if(!f) return
+      setFile(f)
+      const reader = new FileReader()
+      reader.onload = ev => setPreview(ev.target.result)
+      reader.readAsDataURL(f)
+    }
+
+    async function save() {
+      if (!file) return
+      setSaving(true)
+      try {
+        const imgForm = new FormData()
+        imgForm.append('password', adminPassword)
+        imgForm.append('image', file)
+        imgForm.append('title', 'avatar')
+        const res = await fetch('/api/upload', {method:'POST', body:imgForm})
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        setAvatarUrl(data.url)
+        setShowAvatarUpload(false)
+      } catch(err) { alert('Ошибка: ' + err.message) }
+      setSaving(false)
+    }
+
+    return (
+      <div style={MB} onClick={e=>e.target===e.currentTarget&&setShowAvatarUpload(false)}>
+        <div style={{...MBX, width:380}}>
+          <button style={closeX} onClick={()=>setShowAvatarUpload(false)}>✕</button>
+          <div style={mTitle}>Фото профиля</div>
+          <div style={{marginBottom:'1.5rem'}}>
+            {/* Preview */}
+            <div style={{aspectRatio:'3/4',position:'relative',overflow:'hidden',background:'linear-gradient(160deg,#1a1a2e,#0f3460)',borderRadius:2,marginBottom:'1rem'}}>
+              {preview && <img src={preview} alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}/>}
+            </div>
+            {/* Pick button */}
+            <button onClick={()=>document.getElementById('avatar-fi').click()}
+              style={{width:'100%',padding:'10px',fontSize:'0.75rem',letterSpacing:'0.15em',textTransform:'uppercase',border:'1.5px dashed rgba(232,226,217,0.2)',background:'transparent',color:MUT,cursor:'pointer',borderRadius:2}}>
+              {file ? '✓ ' + file.name : 'Выбрать фото'}
+            </button>
+            <input id="avatar-fi" type="file" accept="image/*" style={{display:'none'}} onChange={onPick}/>
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <button style={btnCancel} onClick={()=>setShowAvatarUpload(false)}>Отмена</button>
+            <button style={{...btnSave, opacity:(!file||saving)?0.6:1}} onClick={save} disabled={!file||saving}>
+              {saving ? 'Сохраняю...' : 'Сохранить'}
+            </button>
           </div>
         </div>
       </div>
