@@ -189,19 +189,22 @@ export default function Home() {
     const file = e.target.files[0]; if(!file) return
     setUploadFile(file)
 
-    // Show preview
     const reader = new FileReader()
     reader.onload = async (ev) => {
-      setUploadPreview(ev.target.result)
+      const dataUrl = ev.target.result
+      setUploadPreview(dataUrl)
 
-      // Analyze with AI using the base64 data
+      // Compress and analyze with AI
       setAnalyzing(true)
       try {
-        const compressed = await compressFromDataUrl(ev.target.result, 800, 0.75)
-        const blob = dataUrlToBlob(compressed)
-        const form = new FormData()
-        form.append('image', blob, file.name)
-        const res = await fetch('/api/analyze', { method:'POST', body:form })
+        const compressed = await compressFromDataUrl(dataUrl, 800, 0.75)
+        // Extract pure base64 from data URL
+        const base64 = compressed.split(',')[1]
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, mimeType: 'image/jpeg', filename: file.name })
+        })
         if (res.ok) {
           const data = await res.json()
           if (!data.error) {
@@ -215,7 +218,7 @@ export default function Home() {
             }))
           }
         }
-      } catch(err) { console.error('AI analyze error:', err) }
+      } catch(err) { console.error('AI error:', err) }
       setAnalyzing(false)
     }
     reader.readAsDataURL(file)
@@ -319,10 +322,12 @@ export default function Home() {
       setBulkFiles(prev => prev.map(x => x.id===item.id ? {...x, analyzing:true} : x))
       try {
         const compressed = await compressFromDataUrl(item.preview, 800, 0.75)
-        const blob = dataUrlToBlob(compressed)
-        const form = new FormData()
-        form.append('image', blob, item.file.name)
-        const res = await fetch('/api/analyze', {method:'POST', body:form})
+        const base64 = compressed.split(',')[1]
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, mimeType: 'image/jpeg', filename: item.file.name })
+        })
         if (res.ok) {
           const data = await res.json()
           setBulkFiles(prev => prev.map(x => x.id===item.id ? {
