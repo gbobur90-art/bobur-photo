@@ -181,7 +181,8 @@ export default function Home() {
     reader.onload = ev => setUploadPreview(ev.target.result)
     reader.readAsDataURL(file)
 
-    // Auto-analyze with AI
+    // Auto-analyze with AI — only if we have password and API key configured
+    if (!adminPassword) return // нет пароля — пропускаем анализ
     setAnalyzing(true)
     try {
       const form = new FormData()
@@ -190,14 +191,16 @@ export default function Home() {
       const res = await fetch('/api/analyze', { method:'POST', body:form })
       if (res.ok) {
         const data = await res.json()
-        setUploadForm(f => ({
-          ...f,
-          title: data.title || f.title,
-          desc: data.desc || f.desc,
-          cat: data.cat || f.cat,
-          date: data.date || f.date,
-          location: data.location || f.location,
-        }))
+        if (!data.error) {
+          setUploadForm(f => ({
+            ...f,
+            title: data.title || f.title,
+            desc: data.desc || f.desc,
+            cat: data.cat || f.cat,
+            date: data.date || f.date,
+            location: data.location || f.location,
+          }))
+        }
       }
     } catch {}
     setAnalyzing(false)
@@ -527,16 +530,14 @@ export default function Home() {
         </div>
 
         {/* Stats — BOTTOM RIGHT corner */}
-        {photos.length>0&&(
-          <div style={{position:'fixed',right:'3rem',bottom:'3.5rem',zIndex:100,display:'flex',gap:'2rem',alignItems:'flex-end'}}>
-            {[[photos.length,'фото'],[series.length,'серий'],[totalLikes,'лайков']].map(([num,label])=>(
-              <div key={label} style={{textAlign:'center'}}>
-                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.6rem',fontWeight:300,color:TXT,lineHeight:1}}>{num}</div>
-                <div style={{fontSize:'0.55rem',letterSpacing:'0.18em',textTransform:'uppercase',color:MUT,marginTop:2}}>{label}</div>
-              </div>
-            ))}
-          </div>
-        )}
+        <div style={{position:'fixed',right:'3rem',bottom:'3.5rem',zIndex:100,display:'flex',gap:'2rem',alignItems:'flex-end'}}>
+          {[[photos.length,'фото'],[series.length,'серий'],[Object.values(likes).reduce((a,b)=>a+b,0),'лайков']].map(([num,label])=>(
+            <div key={label} style={{textAlign:'center'}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.6rem',fontWeight:300,color:TXT,lineHeight:1}}>{num}</div>
+              <div style={{fontSize:'0.55rem',letterSpacing:'0.18em',textTransform:'uppercase',color:MUT,marginTop:2}}>{label}</div>
+            </div>
+          ))}
+        </div>
 
         {/* Dots center */}
         {slidePhotos.length>1&&(
@@ -1070,6 +1071,23 @@ export default function Home() {
     const [file, setFile] = useState(null)
     const [preview, setPreview] = useState(avatarUrl || null)
     const [saving, setSaving] = useState(false)
+    const [pw, setPw] = useState(adminPassword || '')
+    const [pwErr, setPwErr] = useState('')
+    const [verified, setVerified] = useState(!!adminPassword)
+
+    async function verifyPw() {
+      try {
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw })
+        })
+        if (!res.ok) { setPwErr('Неверный пароль'); return }
+        setAdminPassword(pw)
+        setVerified(true)
+        setPwErr('')
+      } catch { setPwErr('Ошибка соединения') }
+    }
 
     function onPick(e) {
       const f = e.target.files[0]; if(!f) return
@@ -1084,7 +1102,7 @@ export default function Home() {
       setSaving(true)
       try {
         const imgForm = new FormData()
-        imgForm.append('password', adminPassword)
+        imgForm.append('password', adminPassword || pw)
         imgForm.append('image', file)
         imgForm.append('title', 'avatar')
         const res = await fetch('/api/upload', {method:'POST', body:imgForm})
@@ -1101,24 +1119,39 @@ export default function Home() {
         <div style={{...MBX, width:380}}>
           <button style={closeX} onClick={()=>setShowAvatarUpload(false)}>✕</button>
           <div style={mTitle}>Фото профиля</div>
-          <div style={{marginBottom:'1.5rem'}}>
-            {/* Preview */}
-            <div style={{aspectRatio:'3/4',position:'relative',overflow:'hidden',background:'linear-gradient(160deg,#1a1a2e,#0f3460)',borderRadius:2,marginBottom:'1rem'}}>
-              {preview && <img src={preview} alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}/>}
+
+          {!verified ? (
+            /* Шаг 1 — пароль */
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'1.8rem',marginBottom:'1rem',opacity:0.5}}>🔒</div>
+              <div style={{fontSize:'0.75rem',color:MUT,marginBottom:'1.5rem'}}>Введите пароль администратора</div>
+              <input style={{...mInput,textAlign:'center',letterSpacing:'0.3em',marginBottom:'0.5rem'}}
+                type="password" placeholder="••••••••" value={pw}
+                onChange={e=>setPw(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&verifyPw()} autoFocus/>
+              {pwErr && <div style={{color:'#E24B4A',fontSize:'0.72rem',marginBottom:'0.5rem'}}>{pwErr}</div>}
+              <button style={{...btnSave,width:'100%',padding:10,marginTop:8}} onClick={verifyPw}>Войти</button>
+              <br/><button style={{...btnCancel,border:'none',marginTop:8}} onClick={()=>setShowAvatarUpload(false)}>Отмена</button>
             </div>
-            {/* Pick button */}
-            <button onClick={()=>document.getElementById('avatar-fi').click()}
-              style={{width:'100%',padding:'10px',fontSize:'0.75rem',letterSpacing:'0.15em',textTransform:'uppercase',border:'1.5px dashed rgba(232,226,217,0.2)',background:'transparent',color:MUT,cursor:'pointer',borderRadius:2}}>
-              {file ? '✓ ' + file.name : 'Выбрать фото'}
-            </button>
-            <input id="avatar-fi" type="file" accept="image/*" style={{display:'none'}} onChange={onPick}/>
-          </div>
-          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-            <button style={btnCancel} onClick={()=>setShowAvatarUpload(false)}>Отмена</button>
-            <button style={{...btnSave, opacity:(!file||saving)?0.6:1}} onClick={save} disabled={!file||saving}>
-              {saving ? 'Сохраняю...' : 'Сохранить'}
-            </button>
-          </div>
+          ) : (
+            /* Шаг 2 — выбор фото */
+            <div>
+              <div style={{aspectRatio:'3/4',position:'relative',overflow:'hidden',background:'linear-gradient(160deg,#1a1a2e,#0f3460)',borderRadius:2,marginBottom:'1rem'}}>
+                {preview && <img src={preview} alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}/>}
+              </div>
+              <button onClick={()=>document.getElementById('avatar-fi').click()}
+                style={{width:'100%',padding:'10px',fontSize:'0.75rem',letterSpacing:'0.15em',textTransform:'uppercase',border:'1.5px dashed rgba(232,226,217,0.2)',background:'transparent',color:MUT,cursor:'pointer',borderRadius:2,marginBottom:'1.5rem'}}>
+                {file ? '✓ ' + file.name : 'Выбрать фото'}
+              </button>
+              <input id="avatar-fi" type="file" accept="image/*" style={{display:'none'}} onChange={onPick}/>
+              <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                <button style={btnCancel} onClick={()=>setShowAvatarUpload(false)}>Отмена</button>
+                <button style={{...btnSave, opacity:(!file||saving)?0.6:1}} onClick={save} disabled={!file||saving}>
+                  {saving ? 'Сохраняю...' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
