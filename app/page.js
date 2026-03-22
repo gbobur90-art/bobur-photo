@@ -509,6 +509,33 @@ export default function Home() {
   )
 
   // ═══ LIGHTBOX — настоящий полноэкранный ═══
+  const [showSeriesPicker, setShowSeriesPicker] = useState(false)
+
+  async function assignSeriesToPhoto(photoId, seriesId) {
+    // Update series in state and save
+    setSeries(prev => {
+      const updated = prev.map(s => {
+        const hasPhoto = (s.photoIds||[]).includes(photoId)
+        if (s.id === seriesId) {
+          return hasPhoto ? s : {...s, photoIds:[...(s.photoIds||[]),photoId]}
+        } else {
+          return {...s, photoIds:(s.photoIds||[]).filter(id=>id!==photoId)}
+        }
+      })
+      saveSeries(updated)
+      return updated
+    })
+    // Update photo seriesId in Redis
+    try {
+      await fetch('/api/photos', {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({password:adminPassword, photoId, seriesId})
+      })
+    } catch {}
+    await loadPhotos()
+  }
+
   const Lightbox = () => {
     const arr = getDisplayPhotos()
     const idx = arr.findIndex(p=>p.id===lightbox.id)
@@ -516,6 +543,7 @@ export default function Home() {
     const lc = likes[lightbox.id]||0
     const prev = arr[(idx-1+arr.length)%arr.length]
     const next = arr[(idx+1)%arr.length]
+    const currentSeries = series.find(s=>(s.photoIds||[]).includes(lightbox.id))
 
     return (
       <div style={{
@@ -572,6 +600,31 @@ export default function Home() {
               {liked?'♥':'♡'} {lc>0?`(${lc})`:''} Нравится
             </button>
             <button onClick={()=>{setDlPhoto(lightbox);setShowDlModal(true)}} style={{fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:`1px solid ${C}`,background:'transparent',color:C,cursor:'pointer'}}>✉ Запросить</button>
+            {isAdmin&&(
+              <div style={{position:'relative'}}>
+                <button onClick={()=>setShowSeriesPicker(p=>!p)} style={{fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:MUT,cursor:'pointer'}}>
+                  ✏ {currentSeries?currentSeries.title:'Серия'}
+                </button>
+                {showSeriesPicker&&(
+                  <div style={{position:'absolute',bottom:'110%',right:0,background:'#1a1a1a',border:'1px solid rgba(232,226,217,0.15)',borderRadius:4,minWidth:200,zIndex:10,overflow:'hidden'}}>
+                    <div onClick={()=>{assignSeriesToPhoto(lightbox.id,'');setShowSeriesPicker(false)}}
+                      style={{padding:'10px 14px',fontSize:'0.78rem',color:MUT,cursor:'pointer',borderBottom:'1px solid rgba(232,226,217,0.06)'}}
+                      onMouseEnter={e=>e.target.style.background='rgba(232,226,217,0.06)'}
+                      onMouseLeave={e=>e.target.style.background='transparent'}>
+                      — Без серии —
+                    </div>
+                    {series.map(s=>(
+                      <div key={s.id} onClick={()=>{assignSeriesToPhoto(lightbox.id,s.id);setShowSeriesPicker(false)}}
+                        style={{padding:'10px 14px',fontSize:'0.78rem',color:s.id===currentSeries?.id?C:TXT,cursor:'pointer',background:s.id===currentSeries?.id?'rgba(200,169,110,0.08)':'transparent'}}
+                        onMouseEnter={e=>e.currentTarget.style.background='rgba(232,226,217,0.06)'}
+                        onMouseLeave={e=>e.currentTarget.style.background=s.id===currentSeries?.id?'rgba(200,169,110,0.08)':'transparent'}>
+                        {s.id===currentSeries?.id?'✓ ':''}{s.title}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
