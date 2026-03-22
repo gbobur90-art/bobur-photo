@@ -1,23 +1,15 @@
 import { NextResponse } from 'next/server'
-const KEY = 'bobur_photos'
 
-async function kv(method, path, body) {
-  const url = process.env.KV_REST_API_URL
-  const token = process.env.KV_REST_API_TOKEN
-  if (!url || !token) throw new Error('KV_REST_API_URL или KV_REST_API_TOKEN не заданы в Vercel')
-  const opts = {
-    method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  }
-  if (body !== undefined) opts.body = JSON.stringify(body)
-  const res = await fetch(`${url}${path}`, opts)
-  const text = await res.text()
-  try { return JSON.parse(text) } catch { return { result: null } }
-}
+const KEY = 'bobur_photos'
 
 async function readPhotos() {
   try {
-    const data = await kv('GET', `/get/${KEY}`)
+    const url = process.env.KV_REST_API_URL
+    const token = process.env.KV_REST_API_TOKEN
+    const res = await fetch(`${url}/get/${KEY}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const data = await res.json()
     if (!data?.result) return []
     return JSON.parse(data.result)
   } catch { return [] }
@@ -26,16 +18,19 @@ async function readPhotos() {
 async function writePhotos(photos) {
   const url = process.env.KV_REST_API_URL
   const token = process.env.KV_REST_API_TOKEN
-  const res = await fetch(`${url}/set/${KEY}`, {
+  // Upstash REST pipeline: POST /pipeline
+  const res = await fetch(`${url}/pipeline`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    // ИСПРАВЛЕНО: передаём массив напрямую, Upstash сам сериализует
-    body: JSON.stringify(JSON.stringify(photos)),
+    body: JSON.stringify([
+      ['SET', KEY, JSON.stringify(photos)]
+    ])
   })
-  if (!res.ok) throw new Error('KV write failed: ' + await res.text())
+  const text = await res.text()
+  if (!res.ok) throw new Error('KV write failed: ' + text)
 }
 
 export async function GET() {
@@ -51,9 +46,10 @@ export async function POST(request) {
   try {
     const body = await request.json()
     const { password, photo } = body
+
     const adminPw = process.env.ADMIN_PASSWORD
     if (!adminPw) {
-      return NextResponse.json({ error: 'ADMIN_PASSWORD не задан в Vercel' }, { status: 500 })
+      return NextResponse.json({ error: 'ADMIN_PASSWORD не задан' }, { status: 500 })
     }
     if (password !== adminPw) {
       return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
@@ -61,6 +57,7 @@ export async function POST(request) {
     if (!photo?.url) {
       return NextResponse.json({ ok: true })
     }
+
     const photos = await readPhotos()
     const newPhoto = {
       id: Date.now().toString(),
@@ -88,9 +85,11 @@ export async function DELETE(request) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const password = searchParams.get('password')
+
     if (password !== process.env.ADMIN_PASSWORD) {
       return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
     }
+
     const photos = await readPhotos()
     await writePhotos(photos.filter(p => p.id !== id))
     return NextResponse.json({ success: true })
