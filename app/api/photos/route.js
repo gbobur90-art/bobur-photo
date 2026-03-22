@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-
 const KEY = 'bobur_photos'
 
 async function kv(method, path, body) {
@@ -25,8 +24,6 @@ async function readPhotos() {
 }
 
 async function writePhotos(photos) {
-  const json = JSON.stringify(photos)
-  // Upstash: POST /set/<key> with raw string body
   const url = process.env.KV_REST_API_URL
   const token = process.env.KV_REST_API_TOKEN
   const res = await fetch(`${url}/set/${KEY}`, {
@@ -35,7 +32,8 @@ async function writePhotos(photos) {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(json),
+    // ИСПРАВЛЕНО: передаём массив напрямую, Upstash сам сериализует
+    body: JSON.stringify(JSON.stringify(photos)),
   })
   if (!res.ok) throw new Error('KV write failed: ' + await res.text())
 }
@@ -53,8 +51,6 @@ export async function POST(request) {
   try {
     const body = await request.json()
     const { password, photo } = body
-
-    // 1. Сначала проверяем пароль
     const adminPw = process.env.ADMIN_PASSWORD
     if (!adminPw) {
       return NextResponse.json({ error: 'ADMIN_PASSWORD не задан в Vercel' }, { status: 500 })
@@ -62,13 +58,9 @@ export async function POST(request) {
     if (password !== adminPw) {
       return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
     }
-
-    // 2. Если это просто проверка пароля — возвращаем ok
     if (!photo?.url) {
       return NextResponse.json({ ok: true })
     }
-
-    // 3. Сохраняем фото
     const photos = await readPhotos()
     const newPhoto = {
       id: Date.now().toString(),
@@ -96,7 +88,6 @@ export async function DELETE(request) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const password = searchParams.get('password')
-
     if (password !== process.env.ADMIN_PASSWORD) {
       return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
     }
