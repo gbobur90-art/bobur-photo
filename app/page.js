@@ -227,7 +227,7 @@ export default function Home() {
   async function uploadToImgBB(dataUrl, title) {
     // Upload directly from browser to ImgBB — bypasses Vercel size limits
     const base64 = dataUrl.split(',')[1]
-    const form = new URLSearchParams()
+    const form = new FormData()
     form.append('key', '8093b5a4acf05371a044d92054ea6cd0')
     form.append('image', base64)
     form.append('name', title || 'photo')
