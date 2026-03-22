@@ -95,12 +95,13 @@ export default function Home() {
     } catch {}
   }, [])
 
-  const saveSeries = useCallback(async (newSeries, pw) => {
+  const saveSeries = useCallback(async (newSeries) => {
+    if (!adminPassword) return
     try {
       await fetch("/api/series", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pw || adminPassword, series: newSeries })
+        body: JSON.stringify({ password: adminPassword, series: newSeries })
       })
     } catch {}
   }, [adminPassword])
@@ -931,7 +932,7 @@ export default function Home() {
                     <div style={{fontSize:'0.75rem',color:C,letterSpacing:'0.1em'}}>AI анализирует...</div>
                   </div>}
                 </div>
-                <input id="fi" type="file" accept="image/*" style={{display:'none'}} onChange={onFileSelect} onClick={e=>e.target.value='}/>
+                <input id="fi" type="file" accept="image/*" style={{display:'none'}} onChange={onFileSelect} onClick={e=>{e.target.value=''}}/>
               </div>
               {analyzing&&<div style={{background:'rgba(200,169,110,0.08)',border:'1px solid rgba(200,169,110,0.2)',borderRadius:2,padding:'10px 14px',fontSize:'0.75rem',color:C,marginBottom:'1rem'}}>🤖 AI заполняет поля...</div>}
               {[['title','Название','Напр. Закат в горах'],['desc','Описание','Атмосфера и настроение...'],['location','📍 Место съёмки','Напр. Мальдивы, атолл Раа']].map(([k,l,ph])=>(
@@ -1160,13 +1161,16 @@ export default function Home() {
             </div>
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1.25rem'}}>
-            {editingSeries&&<button style={{...btnCancel,color:'#E24B4A',borderColor:'rgba(226,75,74,0.3)'}} onClick={()=>{setSeries(p=>{const u=p.filter(s=>s.id!==editingSeries.id);saveSeries(u);return u});setShowSeriesEdit(false)}}>Удалить</button>}
+            {editingSeries&&<button style={{...btnCancel,color:'#E24B4A',borderColor:'rgba(226,75,74,0.3)'}} onClick={async()=>{const u=series.filter(s=>s.id!==editingSeries.id);setSeries(u);await saveSeries(u);setShowSeriesEdit(false)}}>Удалить</button>}
             <button style={btnCancel} onClick={()=>setShowSeriesEdit(false)}>Отмена</button>
             <button style={btnSave} onClick={()=>{
               if(!form.title.trim()) return
               const cover=photos.find(p=>sel.includes(p.id))?.url||''
-              if(editingSeries){setSeries(p=>{const u=p.map(s=>s.id===editingSeries.id?{...s,...form,photoIds:sel,cover:cover||s.cover}:s);saveSeries(u);return u})}
-              else{setSeries(p=>{const u=[...p,{id:Date.now().toString(),...form,photoIds:sel,cover}];saveSeries(u);return u})}
+              let updatedSeries
+              if(editingSeries){updatedSeries=series.map(s=>s.id===editingSeries.id?{...s,...form,photoIds:sel,cover:cover||s.cover}:s)}
+              else{updatedSeries=[...series,{id:Date.now().toString(),...form,photoIds:sel,cover}]}
+              setSeries(updatedSeries)
+              await saveSeries(updatedSeries)
               setShowSeriesEdit(false)
             }}>Сохранить</button>
           </div>
