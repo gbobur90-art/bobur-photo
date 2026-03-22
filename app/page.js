@@ -699,17 +699,17 @@ export default function Home() {
         </div>
 
         {/* Stats — BOTTOM RIGHT corner */}
-        <div style={{position:'fixed',right:'3rem',bottom:'3.5rem',zIndex:100,display:'flex',gap:'2rem',alignItems:'flex-end'}}>
+        <div style={{position:'fixed',right:isMobile?'1rem':'3rem',bottom:isMobile?'5rem':'3.5rem',zIndex:100,display:'flex',gap:isMobile?'1rem':'2rem',alignItems:'flex-end'}}>
           {[[photos.length,'фото'],[series.length,'серий'],[Object.values(likes).reduce((a,b)=>a+b,0),'лайков']].map(([num,label])=>(
             <div key={label} style={{textAlign:'center'}}>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.6rem',fontWeight:300,color:TXT,lineHeight:1}}>{num}</div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'1.2rem':'1.6rem',fontWeight:300,color:TXT,lineHeight:1}}>{num}</div>
               <div style={{fontSize:'0.55rem',letterSpacing:'0.18em',textTransform:'uppercase',color:MUT,marginTop:2}}>{label}</div>
             </div>
           ))}
         </div>
 
-        {/* Dots center */}
-        {slidePhotos.length>1&&(
+        {/* Dots center — hidden on mobile */}
+        {slidePhotos.length>1&&!isMobile&&(
           <div style={{position:'fixed',bottom:'3.5rem',left:'50%',transform:'translateX(-50%)',zIndex:100,display:'flex',gap:8,alignItems:'center'}}>
             {slidePhotos.map((_,i)=><div key={i} onClick={()=>setSlideIdx(i)} style={{width:5,height:5,borderRadius:'50%',background:i===slideIdx?C:MUT,cursor:'pointer',transform:i===slideIdx?'scale(1.4)':'scale(1)',transition:'all 0.3s'}}/>)}
           </div>
@@ -718,13 +718,13 @@ export default function Home() {
         {/* Counter — left side */}
         {slidePhotos.length>1&&(
           <>
-            <div style={{position:'fixed',top:'50%',left:'2.5rem',transform:'translateY(-50%)',zIndex:100,writingMode:'vertical-rl',fontSize:'0.65rem',letterSpacing:'0.2em',color:MUT}}>
+            {!isMobile&&<div style={{position:'fixed',top:'50%',left:'2.5rem',transform:'translateY(-50%)',zIndex:100,writingMode:'vertical-rl',fontSize:'0.65rem',letterSpacing:'0.2em',color:MUT}}>
               <span style={{color:TXT}}>{String(slideIdx+1).padStart(2,'0')}</span>{' / '}{String(slidePhotos.length).padStart(2,'0')}
-            </div>
-            <div style={{position:'fixed',bottom:'3.5rem',left:'3rem',zIndex:100,display:'flex',gap:'1rem'}}>
+            </div>}
+            <div style={{position:'fixed',bottom:isMobile?'1.5rem':'3.5rem',left:isMobile?'1rem':'3rem',zIndex:100,display:'flex',gap:'0.75rem'}}>
               {['←','→'].map((ar,i)=>(
                 <button key={i} onClick={()=>setSlideIdx(idx=>i===0?(idx-1+slidePhotos.length)%slidePhotos.length:(idx+1)%slidePhotos.length)}
-                  style={{width:42,height:42,borderRadius:'50%',border:'1px solid rgba(232,226,217,0.2)',background:'rgba(10,10,10,0.4)',backdropFilter:'blur(6px)',color:TXT,cursor:'pointer',fontSize:'1rem',display:'flex',alignItems:'center',justifyContent:'center'}}>{ar}</button>
+                  style={{width:isMobile?40:42,height:isMobile?40:42,borderRadius:'50%',border:'1px solid rgba(232,226,217,0.2)',background:'rgba(10,10,10,0.4)',backdropFilter:'blur(6px)',color:TXT,cursor:'pointer',fontSize:'1rem',display:'flex',alignItems:'center',justifyContent:'center'}}>{ar}</button>
               ))}
             </div>
           </>
