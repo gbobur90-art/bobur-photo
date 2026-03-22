@@ -12,13 +12,16 @@ async function readPhotos() {
     const data = await res.json()
     if (!data?.result) return []
     return JSON.parse(data.result)
-  } catch { return [] }
+  } catch (e) {
+    console.error('readPhotos error:', e.message)
+    return []
+  }
 }
 
 async function writePhotos(photos) {
   const url = process.env.KV_REST_API_URL
   const token = process.env.KV_REST_API_TOKEN
-  // Upstash REST pipeline: POST /pipeline
+  console.log('writePhotos: writing', photos.length, 'photos')
   const res = await fetch(`${url}/pipeline`, {
     method: 'POST',
     headers: {
@@ -30,6 +33,7 @@ async function writePhotos(photos) {
     ])
   })
   const text = await res.text()
+  console.log('writePhotos response:', res.status, text.slice(0, 200))
   if (!res.ok) throw new Error('KV write failed: ' + text)
 }
 
@@ -38,14 +42,17 @@ export async function GET() {
     const photos = await readPhotos()
     return NextResponse.json(photos)
   } catch (err) {
+    console.error('GET error:', err.message)
     return NextResponse.json([], { status: 200 })
   }
 }
 
 export async function POST(request) {
   try {
+    console.log('POST /api/photos started')
     const body = await request.json()
     const { password, photo } = body
+    console.log('POST body received, photo url:', photo?.url?.slice(0, 50))
 
     const adminPw = process.env.ADMIN_PASSWORD
     if (!adminPw) {
@@ -58,7 +65,10 @@ export async function POST(request) {
       return NextResponse.json({ ok: true })
     }
 
+    console.log('Reading photos...')
     const photos = await readPhotos()
+    console.log('Got', photos.length, 'existing photos')
+
     const newPhoto = {
       id: Date.now().toString(),
       title: photo.title || 'Без названия',
@@ -73,9 +83,13 @@ export async function POST(request) {
       createdAt: new Date().toISOString(),
     }
     photos.unshift(newPhoto)
+
+    console.log('Writing', photos.length, 'photos...')
     await writePhotos(photos)
+    console.log('Write success!')
     return NextResponse.json(newPhoto)
   } catch (err) {
+    console.error('POST error:', err.message, err.stack)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
