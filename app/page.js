@@ -843,7 +843,8 @@ export default function Home() {
             <>
               <div style={{marginBottom:'1rem'}}>
                 <label style={mLabel}>Фотография</label>
-                <div style={{border:uploadFile?`1.5px solid ${C}`:'1.5px dashed rgba(232,226,217,0.2)',borderRadius:2,padding:'1.25rem',textAlign:'center',cursor:'pointer',color:uploadFile?C:MUT,fontSize:13,position:'relative'}} onClick={()=>!analyzing&&document.getElementById('fi').click()}>
+                <div style={{border:uploadFile?`1.5px solid ${C}`:'1.5px dashed rgba(232,226,217,0.2)',borderRadius:2,padding:'1.25rem',textAlign:'center',cursor:'pointer',color:uploadFile?C:MUT,fontSize:13,position:'relative'}} onClick={()=>{if(analyzing)return;const fi=document.getElementById('fi');if(fi){fi.value='';fi.click()}}}>
+
                   {uploadPreview?<img src={uploadPreview} alt="" style={{maxHeight:100,borderRadius:2,display:'block',margin:'0 auto'}}/>:'Нажмите, чтобы выбрать фото'}
                   <div style={{marginTop:4,fontSize:11}}>{uploadFile?.name||''}</div>
                   {analyzing&&<div style={{position:'absolute',inset:0,background:'rgba(10,10,10,0.8)',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:2,flexDirection:'column',gap:8}}>
