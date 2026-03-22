@@ -224,7 +224,21 @@ export default function Home() {
     reader.readAsDataURL(file)
   }
 
-  function compressFromDataUrl(dataUrl, maxSize, quality) {
+  async function uploadToImgBB(dataUrl, title) {
+    // Upload directly from browser to ImgBB — bypasses Vercel size limits
+    const base64 = dataUrl.split(',')[1]
+    const form = new URLSearchParams()
+    form.append('key', '8093b5a4acf05371a044d92054ea6cd0')
+    form.append('image', base64)
+    form.append('name', title || 'photo')
+    const res = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      body: form
+    })
+    const data = await res.json()
+    if (!data.success) throw new Error('ImgBB: ' + JSON.stringify(data.error))
+    return { url: data.data.url, thumb: data.data.thumb?.url || data.data.url }
+  }
     return new Promise((resolve) => {
       const img = new Image()
       img.onload = () => {
@@ -262,13 +276,9 @@ export default function Home() {
         seriesId = newSer.id
       }
 
-      const imgForm = new FormData()
-      imgForm.append('password', adminPassword)
-      imgForm.append('image', uploadFile)
-      imgForm.append('title', uploadForm.title)
-      const imgRes = await fetch('/api/upload', {method:'POST', body:imgForm})
-      const imgData = await imgRes.json()
-      if (!imgRes.ok) throw new Error(imgData.error)
+      // Upload directly to ImgBB from browser (no Vercel size limit)
+      const compressed = await compressFromDataUrl(uploadPreview, 1600, 0.88)
+      const imgData = await uploadToImgBB(compressed, uploadForm.title)
 
       const fullDesc = uploadForm.location
         ? `${uploadForm.desc}${uploadForm.desc ? ' · ' : ''}📍 ${uploadForm.location}`
@@ -373,13 +383,8 @@ export default function Home() {
     for (const item of pending) {
       try {
         setBulkFiles(prev => prev.map(x => x.id===item.id ? {...x, status:'uploading'} : x))
-        const imgForm = new FormData()
-        imgForm.append('password', adminPassword)
-        imgForm.append('image', item.file)
-        imgForm.append('title', item.form.title)
-        const imgRes = await fetch('/api/upload', {method:'POST', body:imgForm})
-        const imgData = await imgRes.json()
-        if (!imgRes.ok) throw new Error(imgData.error)
+        const compressed = await compressFromDataUrl(item.preview, 1600, 0.88)
+        const imgData = await uploadToImgBB(compressed, item.form.title)
 
         const fullDesc = item.form.location
           ? `${item.form.desc}${item.form.desc?' · ':''}📍 ${item.form.location}`
@@ -1166,15 +1171,9 @@ export default function Home() {
       if (!file) return
       setSaving(true)
       try {
-        const imgForm = new FormData()
-        imgForm.append('password', adminPassword || pw)
-        imgForm.append('image', file)
-        imgForm.append('title', 'avatar')
-        const res = await fetch('/api/upload', {method:'POST', body:imgForm})
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error)
+        const compressed = await compressFromDataUrl(preview, 800, 0.85)
+        const data = await uploadToImgBB(compressed, 'avatar')
         setAvatarUrl(data.url)
-        // Save avatar URL to KV so it persists
         await fetch('/api/about', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
