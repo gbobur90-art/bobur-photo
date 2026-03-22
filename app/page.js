@@ -87,7 +87,25 @@ export default function Home() {
     } catch {}
   }, [])
 
-  useEffect(() => { loadPhotos(); loadAbout() }, [loadPhotos, loadAbout])
+  const loadSeries = useCallback(async () => {
+    try {
+      const res = await fetch("/api/series")
+      const data = await res.json()
+      if (Array.isArray(data)) setSeries(data)
+    } catch {}
+  }, [])
+
+  const saveSeries = useCallback(async (newSeries, pw) => {
+    try {
+      await fetch("/api/series", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw || adminPassword, series: newSeries })
+      })
+    } catch {}
+  }, [adminPassword])
+
+  useEffect(() => { loadPhotos(); loadAbout(); loadSeries() }, [loadPhotos, loadAbout, loadSeries])
 
   useEffect(() => {
     if (photos.length === 0) return
@@ -299,9 +317,13 @@ export default function Home() {
       const newPhoto = await metaRes.json()
 
       if (seriesId && newPhoto?.id) {
-        setSeries(prev => prev.map(s => s.id===seriesId
-          ? {...s, photoIds:[...(s.photoIds||[]),newPhoto.id], cover:s.cover||imgData.url}
-          : s))
+        setSeries(prev => {
+          const updated = prev.map(s => s.id===seriesId
+            ? {...s, photoIds:[...(s.photoIds||[]),newPhoto.id], cover:s.cover||imgData.url}
+            : s)
+          saveSeries(updated)
+          return updated
+        })
       }
 
       await loadPhotos()
@@ -412,6 +434,10 @@ export default function Home() {
       }
       done++
       setBulkProgress(Math.round(done/pending.length*100))
+    }
+    // Save series to Redis after all uploads
+    if (seriesId) {
+      setSeries(prev => { saveSeries(prev); return prev })
     }
     await loadPhotos()
     setBulkUploading(false)
@@ -1081,13 +1107,13 @@ export default function Home() {
             </div>
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1.25rem'}}>
-            {editingSeries&&<button style={{...btnCancel,color:'#E24B4A',borderColor:'rgba(226,75,74,0.3)'}} onClick={()=>{setSeries(p=>p.filter(s=>s.id!==editingSeries.id));setShowSeriesEdit(false)}}>Удалить</button>}
+            {editingSeries&&<button style={{...btnCancel,color:'#E24B4A',borderColor:'rgba(226,75,74,0.3)'}} onClick={()=>{setSeries(p=>{const u=p.filter(s=>s.id!==editingSeries.id);saveSeries(u);return u});setShowSeriesEdit(false)}}>Удалить</button>}
             <button style={btnCancel} onClick={()=>setShowSeriesEdit(false)}>Отмена</button>
             <button style={btnSave} onClick={()=>{
               if(!form.title.trim()) return
               const cover=photos.find(p=>sel.includes(p.id))?.url||''
-              if(editingSeries){setSeries(p=>p.map(s=>s.id===editingSeries.id?{...s,...form,photoIds:sel,cover:cover||s.cover}:s))}
-              else{setSeries(p=>[...p,{id:Date.now().toString(),...form,photoIds:sel,cover}])}
+              if(editingSeries){setSeries(p=>{const u=p.map(s=>s.id===editingSeries.id?{...s,...form,photoIds:sel,cover:cover||s.cover}:s);saveSeries(u);return u})}
+              else{setSeries(p=>{const u=[...p,{id:Date.now().toString(),...form,photoIds:sel,cover}];saveSeries(u);return u})}
               setShowSeriesEdit(false)
             }}>Сохранить</button>
           </div>
