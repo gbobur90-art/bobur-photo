@@ -462,17 +462,51 @@ export default function Home() {
   const mTitle = {fontFamily:"'Cormorant Garamond',serif",fontSize:'1.5rem',fontWeight:300,marginBottom:'1.5rem'}
   const closeX = {position:'absolute',top:12,right:14,background:'none',border:'none',color:MUT,fontSize:'1.2rem',cursor:'pointer'}
 
+  const [mobileMenu, setMobileMenu] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   const Nav = ({solid}) => (
-    <nav style={{position:'fixed',top:0,left:0,right:0,zIndex:200,height:64,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 2.5rem',background:solid?BG:'linear-gradient(to bottom,rgba(10,10,10,0.9),transparent)',borderBottom:solid?'1px solid rgba(232,226,217,0.06)':'none'}}>
-      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.4rem',fontWeight:300,letterSpacing:'0.12em',color:TXT,cursor:'pointer'}} onClick={()=>setView('home')}>
-        Фото<em style={{color:C,fontStyle:'italic'}}>Дневник</em>
+    <nav style={{position:'fixed',top:0,left:0,right:0,zIndex:200,background:solid?BG:'linear-gradient(to bottom,rgba(10,10,10,0.9),transparent)',borderBottom:solid?'1px solid rgba(232,226,217,0.06)':'none'}}>
+      <div style={{height:56,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 1.25rem'}}>
+        <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.3rem',fontWeight:300,letterSpacing:'0.1em',color:TXT,cursor:'pointer'}} onClick={()=>{setView('home');setMobileMenu(false)}}>
+          Фото<em style={{color:C,fontStyle:'italic'}}>Дневник</em>
+        </div>
+        {!isMobile && (
+          <ul style={{display:'flex',gap:'1.5rem',listStyle:'none',alignItems:'center',margin:0,padding:0}}>
+            {[['home','Главная'],['gallery','Галерея'],['about','Об авторе']].map(([v,l])=>(
+              <li key={v}><span style={{fontSize:'0.72rem',letterSpacing:'0.18em',textTransform:'uppercase',color:view===v?TXT:MUT,cursor:'pointer'}} onClick={()=>setView(v)}>{l}</span></li>
+            ))}
+            <li><button style={{fontSize:'0.72rem',letterSpacing:'0.15em',textTransform:'uppercase',color:BG,background:C,border:'none',padding:'6px 16px',borderRadius:2,cursor:'pointer'}} onClick={()=>requireAdmin('upload',()=>setShowUpload(true))}>+ Добавить</button></li>
+          </ul>
+        )}
+        {isMobile && (
+          <button onClick={()=>setMobileMenu(m=>!m)} style={{background:'none',border:'none',color:TXT,fontSize:'1.5rem',cursor:'pointer',padding:'4px 8px',lineHeight:1}}>
+            {mobileMenu?'✕':'☰'}
+          </button>
+        )}
       </div>
-      <ul style={{display:'flex',gap:'2rem',listStyle:'none',alignItems:'center'}}>
-        {[['home','Главная'],['gallery','Галерея'],['about','Об авторе']].map(([v,l])=>(
-          <li key={v}><span style={{fontSize:'0.72rem',letterSpacing:'0.18em',textTransform:'uppercase',color:view===v?TXT:MUT,cursor:'pointer'}} onClick={()=>setView(v)}>{l}</span></li>
-        ))}
-        <li><button style={{fontSize:'0.72rem',letterSpacing:'0.15em',textTransform:'uppercase',color:BG,background:C,border:'none',padding:'6px 16px',borderRadius:2,cursor:'pointer'}} onClick={()=>requireAdmin('upload',()=>setShowUpload(true))}>+ Добавить</button></li>
-      </ul>
+      {isMobile && mobileMenu && (
+        <div style={{background:'rgba(10,10,10,0.98)',borderTop:'1px solid rgba(232,226,217,0.08)',padding:'0.5rem 0 1rem'}}>
+          {[['home','Главная'],['gallery','Галерея'],['about','Об авторе']].map(([v,l])=>(
+            <div key={v} onClick={()=>{setView(v);setMobileMenu(false)}}
+              style={{padding:'14px 1.5rem',fontSize:'0.8rem',letterSpacing:'0.18em',textTransform:'uppercase',color:view===v?C:MUT,cursor:'pointer',borderBottom:'1px solid rgba(232,226,217,0.04)'}}>
+              {l}
+            </div>
+          ))}
+          <div style={{padding:'14px 1.5rem'}}>
+            <button style={{fontSize:'0.8rem',letterSpacing:'0.15em',textTransform:'uppercase',color:BG,background:C,border:'none',padding:'12px 0',borderRadius:2,cursor:'pointer',width:'100%'}}
+              onClick={()=>{setMobileMenu(false);requireAdmin('upload',()=>setShowUpload(true))}}>
+              + Добавить фото
+            </button>
+          </div>
+        </div>
+      )}
     </nav>
   )
 
@@ -644,7 +678,7 @@ export default function Home() {
               <div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}/>
               <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.75) 100%)'}}/>
               <div style={{position:'absolute',bottom:0,left:0,right:0,height:'40%',background:'linear-gradient(to top,rgba(0,0,0,0.8),transparent)'}}/>
-              <div style={{position:'relative',zIndex:2,padding:'0 3rem 7rem',width:'100%'}}>
+              <div style={{position:'relative',zIndex:2,padding:isMobile?'0 1.5rem 7rem':'0 3rem 7rem',width:'100%'}}>
                 <div style={{fontSize:'0.65rem',letterSpacing:'0.25em',textTransform:'uppercase',color:C,marginBottom:'0.6rem'}}>Портфолио</div>
                 <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'clamp(2rem,5vw,4rem)',fontWeight:300}}>Bobur Gafurov</div>
               </div>
@@ -711,8 +745,8 @@ export default function Home() {
     return (
       <div style={{minHeight:'100vh',background:BG,color:TXT,fontFamily:"'Jost',sans-serif",fontWeight:300,overflowY:'auto'}}>
         <Nav solid={true}/>
-        <div style={{paddingTop:80}}>
-          <div style={{padding:'2rem 3rem 0',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
+        <div style={{paddingTop:isMobile?56:80}}>
+          <div style={{padding:isMobile?'1rem 1rem 0':'2rem 3rem 0',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'2.2rem',fontWeight:300}}>Галерея</div>
             <div style={{display:'flex',gap:8}}>
               {isAdmin&&galleryTab==='all'&&<button style={{fontSize:'0.65rem',padding:'6px 16px',borderRadius:2,border:'none',background:C,color:BG,cursor:'pointer',letterSpacing:'0.12em',textTransform:'uppercase'}} onClick={()=>setShowCatManager(true)}>⚙ Темы</button>}
@@ -721,7 +755,7 @@ export default function Home() {
           </div>
 
           {/* Tabs */}
-          <div style={{padding:'1.25rem 3rem 0',display:'flex',gap:0,borderBottom:'1px solid rgba(232,226,217,0.08)'}}>
+          <div style={{padding:isMobile?'0.75rem 1rem 0':'1.25rem 3rem 0',display:'flex',gap:0,borderBottom:'1px solid rgba(232,226,217,0.08)'}}>
             {[['all','Все фото'],['cats','Категории'],['series','Серии']].map(([tab,label])=>(
               <button key={tab} onClick={()=>{setGalleryTab(tab);setActiveSeries(null)}}
                 style={{padding:'10px 24px',fontSize:'0.72rem',letterSpacing:'0.15em',textTransform:'uppercase',background:'transparent',border:'none',borderBottom:galleryTab===tab?`2px solid ${C}`:'2px solid transparent',color:galleryTab===tab?TXT:MUT,cursor:'pointer',marginBottom:-1}}>
@@ -749,8 +783,8 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <div style={{fontSize:'0.7rem',color:MUT,padding:'0 3rem 0.5rem'}}>{displayPhotos.length} фото</div>
-              <div style={{padding:'0 3rem 4rem'}}><PhotoGrid list={displayPhotos}/></div>
+              <div style={{fontSize:'0.7rem',color:MUT,padding:isMobile?'0 1rem 0.5rem':'0 3rem 0.5rem'}}>{displayPhotos.length} фото</div>
+              <div style={{padding:isMobile?'0 1rem 4rem':'0 3rem 4rem'}}><PhotoGrid list={displayPhotos}/></div>
             </div>
           )}
 
@@ -835,7 +869,7 @@ export default function Home() {
   if (view==='about') return (
     <div style={{minHeight:'100vh',background:BG,color:TXT,fontFamily:"'Jost',sans-serif",fontWeight:300,overflowY:'auto'}}>
       <Nav solid={true}/>
-      <div style={{maxWidth:900,margin:'0 auto',padding:'calc(64px + 3rem) 3rem 5rem',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'5rem',alignItems:'start'}}>
+      <div style={{maxWidth:900,margin:'0 auto',padding:isMobile?'calc(56px + 1.5rem) 1.25rem 3rem':'calc(64px + 3rem) 3rem 5rem',display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:isMobile?'2rem':'5rem',alignItems:'start'}}>
         {/* Avatar */}
         <div style={{aspectRatio:'3/4',position:'relative',overflow:'hidden',background:'linear-gradient(160deg,#1a1a2e,#0f3460 60%,#1c0a00)'}}>
           {avatarUrl && <img src={avatarUrl} alt={about.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
