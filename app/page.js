@@ -1170,7 +1170,7 @@ export default function Home() {
               if(editingSeries){updatedSeries=series.map(s=>s.id===editingSeries.id?{...s,...form,photoIds:sel,cover:cover||s.cover}:s)}
               else{updatedSeries=[...series,{id:Date.now().toString(),...form,photoIds:sel,cover}]}
               setSeries(updatedSeries)
-              await saveSeries(updatedSeries)
+              saveSeries(updatedSeries)
               setShowSeriesEdit(false)
             }}>Сохранить</button>
           </div>
