@@ -239,6 +239,9 @@ export default function Home() {
     if (!data.success) throw new Error('ImgBB: ' + JSON.stringify(data.error))
     return { url: data.data.url, thumb: data.data.thumb?.url || data.data.url }
   }
+
+  // ← ИСПРАВЛЕНИЕ: была удалена эта строка в прошлом коммите
+  async function compressFromDataUrl(dataUrl, maxSize, quality) {
     return new Promise((resolve) => {
       const img = new Image()
       img.onload = () => {
