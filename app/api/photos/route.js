@@ -103,3 +103,19 @@ export async function DELETE(request) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
+
+export async function PATCH(request) {
+  try {
+    const body = await request.json()
+    const { password, photoId, seriesId } = body
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
+    }
+    const photos = await readPhotos()
+    const updated = photos.map(p => p.id === photoId ? {...p, seriesId: seriesId || ''} : p)
+    await writePhotos(updated)
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
