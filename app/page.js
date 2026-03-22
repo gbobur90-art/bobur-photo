@@ -851,7 +851,7 @@ export default function Home() {
                     <div style={{fontSize:'0.75rem',color:C,letterSpacing:'0.1em'}}>AI анализирует...</div>
                   </div>}
                 </div>
-                <input id="fi" type="file" accept="image/*" style={{display:'none'}} onChange={onFileSelect}/>
+                <input id="fi" type="file" accept="image/*" style={{display:'none'}} onChange={onFileSelect} onClick={e=>e.target.value='}/>
               </div>
               {analyzing&&<div style={{background:'rgba(200,169,110,0.08)',border:'1px solid rgba(200,169,110,0.2)',borderRadius:2,padding:'10px 14px',fontSize:'0.75rem',color:C,marginBottom:'1rem'}}>🤖 AI заполняет поля...</div>}
               {[['title','Название','Напр. Закат в горах'],['desc','Описание','Атмосфера и настроение...'],['location','📍 Место съёмки','Напр. Мальдивы, атолл Раа']].map(([k,l,ph])=>(
