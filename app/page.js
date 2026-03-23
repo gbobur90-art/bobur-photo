@@ -545,6 +545,8 @@ export default function Home() {
 
   // ═══ LIGHTBOX — настоящий полноэкранный ═══
   const [showSeriesPicker, setShowSeriesPicker] = useState(false)
+  const [showEditPhoto, setShowEditPhoto] = useState(false)
+  const [editingPhoto, setEditingPhoto] = useState(null)
 
   async function assignSeriesToPhoto(photoId, seriesId) {
     // Update series in state and save
@@ -569,6 +571,29 @@ export default function Home() {
       })
     } catch {}
     await loadPhotos()
+  }
+
+  async function deletePhoto(photoId) {
+    if (!confirm('Удалить эту фотографию?')) return
+    try {
+      await fetch(`/api/photos?id=${photoId}&password=${encodeURIComponent(adminPassword)}`, { method: 'DELETE' })
+      await loadPhotos()
+      setLightbox(null)
+    } catch(err) { alert('Ошибка: ' + err.message) }
+  }
+
+  async function saveEditPhoto(photoId, form) {
+    try {
+      const res = await fetch('/api/photos', {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({password:adminPassword, photoId, ...form})
+      })
+      if (!res.ok) throw new Error('Ошибка сохранения')
+      await loadPhotos()
+      setShowEditPhoto(false)
+      setEditingPhoto(null)
+    } catch(err) { alert('Ошибка: ' + err.message) }
   }
 
   const Lightbox = () => {
@@ -635,6 +660,12 @@ export default function Home() {
               {liked?'♥':'♡'} {lc>0?`(${lc})`:''} Нравится
             </button>
             <button onClick={()=>{setDlPhoto(lightbox);setShowDlModal(true)}} style={{fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:`1px solid ${C}`,background:'transparent',color:C,cursor:'pointer'}}>✉ Запросить</button>
+            {isAdmin&&(
+              <div style={{display:'flex',gap:8}}>
+                <button onClick={()=>{setEditingPhoto(lightbox);setShowEditPhoto(true)}} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:TXT,cursor:'pointer'}}>✏</button>
+                <button onClick={()=>deletePhoto(lightbox.id)} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(226,75,74,0.3)',background:'rgba(0,0,0,0.5)',color:'#E24B4A',cursor:'pointer'}}>🗑</button>
+              </div>
+            )}
             {isAdmin&&(
               <div style={{position:'relative'}}>
                 <button onClick={()=>setShowSeriesPicker(p=>!p)} style={{fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:MUT,cursor:'pointer'}}>
@@ -727,6 +758,7 @@ export default function Home() {
 
         {showPwModal&&<PwModal/>}
         {showUpload&&<UploadModal/>}
+        {showEditPhoto&&editingPhoto&&<EditPhotoModal/>}
       </div>
     )
   }
@@ -856,6 +888,7 @@ export default function Home() {
         {showDlModal&&dlPhoto&&<DlModal/>}
         {showCatManager&&<CatManagerModal/>}
         {showSeriesEdit&&<SeriesEditModal/>}
+        {showEditPhoto&&editingPhoto&&<EditPhotoModal/>}
       </div>
     )
   }
@@ -1338,6 +1371,69 @@ export default function Home() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    )
+  }
+
+  function EditPhotoModal() {
+    const [form, setForm] = useState({
+      title: editingPhoto?.title || '',
+      desc: editingPhoto?.desc || '',
+      cat: editingPhoto?.cat || cats[0],
+      date: editingPhoto?.date || '',
+      location: editingPhoto?.location || '',
+    })
+    const [saving, setSaving] = useState(false)
+    const currentSer = series.find(s=>(s.photoIds||[]).includes(editingPhoto?.id))
+    const [selSeriesId, setSelSeriesId] = useState(currentSer?.id || '')
+
+    async function handleSave() {
+      setSaving(true)
+      // Update series assignment
+      if (selSeriesId !== (currentSer?.id || '')) {
+        await assignSeriesToPhoto(editingPhoto.id, selSeriesId)
+      }
+      await saveEditPhoto(editingPhoto.id, form)
+      setSaving(false)
+    }
+
+    return (
+      <div style={MB} onClick={e=>e.target===e.currentTarget&&setShowEditPhoto(false)}>
+        <div style={MBX}>
+          <button style={closeX} onClick={()=>setShowEditPhoto(false)}>✕</button>
+          <div style={mTitle}>Редактировать фото</div>
+          {[['title','Название'],['desc','Описание'],['location','📍 Место']].map(([k,l])=>(
+            <div key={k} style={{marginBottom:'1rem'}}>
+              <label style={mLabel}>{l}</label>
+              {k==='desc'
+                ?<textarea style={{...mInput,minHeight:56,resize:'vertical'}} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/>
+                :<input style={mInput} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/>}
+            </div>
+          ))}
+          <div style={{marginBottom:'1rem'}}>
+            <label style={mLabel}>Тема</label>
+            <select style={mInput} value={form.cat} onChange={e=>setForm(f=>({...f,cat:e.target.value}))}>
+              {cats.map(cat=><option key={cat}>{cat}</option>)}
+            </select>
+          </div>
+          <div style={{marginBottom:'1rem'}}>
+            <label style={mLabel}>Серия</label>
+            <select style={mInput} value={selSeriesId} onChange={e=>setSelSeriesId(e.target.value)}>
+              <option value="">— Без серии —</option>
+              {series.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+          </div>
+          <div style={{marginBottom:'1rem'}}>
+            <label style={mLabel}>Дата</label>
+            <input style={mInput} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1.25rem'}}>
+            <button style={btnCancel} onClick={()=>setShowEditPhoto(false)}>Отмена</button>
+            <button style={{...btnSave,opacity:saving?0.6:1}} onClick={handleSave} disabled={saving}>
+              {saving?'Сохраняю...':'Сохранить'}
+            </button>
+          </div>
         </div>
       </div>
     )
