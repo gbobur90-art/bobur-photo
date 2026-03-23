@@ -107,12 +107,23 @@ export async function DELETE(request) {
 export async function PATCH(request) {
   try {
     const body = await request.json()
-    const { password, photoId, seriesId } = body
+    const { password, photoId, seriesId, title, desc, cat, date, location } = body
     if (password !== process.env.ADMIN_PASSWORD) {
       return NextResponse.json({ error: 'Неверный пароль' }, { status: 401 })
     }
     const photos = await readPhotos()
-    const updated = photos.map(p => p.id === photoId ? {...p, seriesId: seriesId || ''} : p)
+    const updated = photos.map(p => {
+      if (p.id !== photoId) return p
+      return {
+        ...p,
+        ...(title !== undefined && { title }),
+        ...(desc !== undefined && { desc }),
+        ...(cat !== undefined && { cat }),
+        ...(date !== undefined && { date }),
+        ...(location !== undefined && { location }),
+        ...(seriesId !== undefined && { seriesId: seriesId || '' }),
+      }
+    })
     await writePhotos(updated)
     return NextResponse.json({ ok: true })
   } catch (err) {
