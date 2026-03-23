@@ -699,7 +699,7 @@ export default function Home() {
         </div>
 
         {/* Stats — BOTTOM RIGHT corner */}
-        <div style={{position:'fixed',right:isMobile?'1rem':'3rem',bottom:isMobile?'5rem':'3.5rem',zIndex:100,display:'flex',gap:isMobile?'1rem':'2rem',alignItems:'flex-end'}}>
+        <div style={{position:'fixed',right:isMobile?'1rem':'3rem',bottom:isMobile?'5rem':'5.5rem',zIndex:100,display:'flex',gap:isMobile?'1rem':'2rem',alignItems:'flex-end'}}>
           {[[photos.length,'фото'],[series.length,'серий'],[Object.values(likes).reduce((a,b)=>a+b,0),'лайков']].map(([num,label])=>(
             <div key={label} style={{textAlign:'center'}}>
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'1.2rem':'1.6rem',fontWeight:300,color:TXT,lineHeight:1}}>{num}</div>
