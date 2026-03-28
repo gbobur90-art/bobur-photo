@@ -57,6 +57,14 @@ export default function Home() {
   const [bulkUploading, setBulkUploading] = useState(false)
   const [bulkProgress, setBulkProgress] = useState(0)
   const [currentSection, setCurrentSection] = useState(0)
+  const [preloaderDone, setPreloaderDone] = useState(false)
+  const [preloaderOut, setPreloaderOut] = useState(false)
+  const [cursorPos, setCursorPos] = useState({x:-100,y:-100})
+  const [cursorHover, setCursorHover] = useState(false)
+  const [views, setViews] = useState({})
+  const [showSearchModal, setShowSearchModal] = useState(false)
+  const [homeSearch, setHomeSearch] = useState('')
+  const [copiedId, setCopiedId] = useState(null)
 
   const [about, setAbout] = useState({
     name:'Bobur', nameLast:'Gafurov', role:'Фотограф · Ташкент',
@@ -66,6 +74,78 @@ export default function Home() {
   })
 
   const timerRef = useRef(null)
+
+  // Preloader
+  useEffect(() => {
+    const t1 = setTimeout(() => setPreloaderOut(true), 1800)
+    const t2 = setTimeout(() => setPreloaderDone(true), 2400)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [])
+
+  // Custom cursor
+  useEffect(() => {
+    const move = (e) => setCursorPos({x:e.clientX, y:e.clientY})
+    const over = (e) => { if(e.target.closest('button')||e.target.closest('a')||e.target.closest('[data-hover]')) setCursorHover(true) }
+    const out = () => setCursorHover(false)
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseover', over)
+    window.addEventListener('mouseout', out)
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseover', over); window.removeEventListener('mouseout', out) }
+  }, [])
+
+  // Views counter
+  function incrementView(photoId) {
+    try {
+      const key = 'view_'+photoId
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key,'1')
+        setViews(v => ({...v, [photoId]:(v[photoId]||0)+1}))
+      }
+    } catch {}
+  }
+
+  // Watermark download
+  async function downloadWithWatermark(photo, authorName) {
+    try {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width; canvas.height = img.height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0)
+        const fontSize = Math.max(18, Math.round(img.width * 0.025))
+        ctx.font = `${fontSize}px Georgia, serif`
+        const text = '© ' + authorName
+        const tw = ctx.measureText(text).width
+        const pad = fontSize * 0.8
+        ctx.fillStyle = 'rgba(0,0,0,0.45)'
+        ctx.fillRect(img.width - tw - pad*2 - 10, img.height - fontSize - pad*2 - 10, tw + pad*2, fontSize + pad*2)
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'
+        ctx.fillText(text, img.width - tw - pad - 10, img.height - pad - 10)
+        canvas.toBlob(blob => {
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a'); a.href = url
+          a.download = (photo.title||'photo').replace(/[^a-zа-я0-9]/gi,'_') + '.jpg'
+          a.click(); URL.revokeObjectURL(url)
+        }, 'image/jpeg', 0.92)
+      }
+      img.onerror = () => { window.open(photo.url, '_blank') }
+      img.src = photo.url
+    } catch { window.open(photo.url, '_blank') }
+  }
+
+  // Share / copy link
+  function sharePhoto(photoId, e) {
+    e && e.stopPropagation()
+    try {
+      const url = window.location.origin + '?photo=' + photoId
+      navigator.clipboard.writeText(url)
+      setCopiedId(photoId)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch {}
+  }
+
 
   const loadPhotos = useCallback(async () => {
     try {
@@ -376,19 +456,25 @@ export default function Home() {
   )
 
   const PhotoCard = ({p}) => {
-    const liked = isLiked(p.id); const lc = likes[p.id]||0
+    const liked = isLiked(p.id); const lc = likes[p.id]||0; const vc = views[p.id]||0
     return (
       <div style={{position:'relative',aspectRatio:'3/2',overflow:'hidden',cursor:'zoom-in',background:'#111'}}
         onMouseEnter={e=>{e.currentTarget.querySelector('.ov').style.background='rgba(0,0,0,0.5)';e.currentTarget.querySelectorAll('.rv').forEach(el=>{el.style.opacity='1';el.style.transform='translateY(0)'})}}
         onMouseLeave={e=>{e.currentTarget.querySelector('.ov').style.background='rgba(0,0,0,0)';e.currentTarget.querySelectorAll('.rv').forEach(el=>{el.style.opacity='0';el.style.transform='translateY(8px)'})}}
-        onClick={()=>setLightbox(p)}>
+        onClick={()=>{incrementView(p.id);setLightbox(p)}}>
         {p.url?<img src={p.url} alt={p.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none',userSelect:'none'}} draggable={false}/>:<div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}/>}
-        {lc>0&&<div style={{position:'absolute',top:8,right:8,background:'rgba(10,10,10,0.75)',backdropFilter:'blur(4px)',border:'1px solid rgba(226,75,74,0.4)',borderRadius:999,padding:'3px 8px',fontSize:'0.65rem',color:'#E24B4A',display:'flex',alignItems:'center',gap:4,zIndex:2}}>♥ {lc}</div>}
+        <div style={{position:'absolute',top:8,right:8,display:'flex',gap:5,zIndex:2}}>
+          {vc>0&&<div style={{background:'rgba(10,10,10,0.7)',backdropFilter:'blur(4px)',borderRadius:999,padding:'3px 8px',fontSize:'0.6rem',color:MUT,display:'flex',alignItems:'center',gap:3}}>👁 {vc}</div>}
+          {lc>0&&<div style={{background:'rgba(10,10,10,0.75)',backdropFilter:'blur(4px)',border:'1px solid rgba(226,75,74,0.4)',borderRadius:999,padding:'3px 8px',fontSize:'0.65rem',color:'#E24B4A',display:'flex',alignItems:'center',gap:4}}>♥ {lc}</div>}
+        </div>
         <div className="ov" style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'1rem',background:'rgba(0,0,0,0)',transition:'background 0.3s',zIndex:1}}>
           <div className="rv" style={{fontSize:'0.6rem',letterSpacing:'0.22em',textTransform:'uppercase',color:C,marginBottom:3,opacity:0,transform:'translateY(8px)',transition:'all 0.3s'}}>{p.cat}</div>
           <div className="rv" style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1rem',fontWeight:300,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.04s'}}>{p.title}</div>
           <div className="rv" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:6,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.08s'}}>
-            <button onClick={e=>{e.stopPropagation();setDlPhoto(p);setShowDlModal(true)}} style={{fontSize:'0.6rem',letterSpacing:'0.15em',textTransform:'uppercase',padding:'5px 12px',borderRadius:2,border:'1px solid rgba(232,226,217,0.3)',background:'rgba(10,10,10,0.6)',color:TXT,cursor:'pointer'}}>✉ Напиши мне</button>
+            <div style={{display:'flex',gap:5}}>
+              <button onClick={e=>{e.stopPropagation();setDlPhoto(p);setShowDlModal(true)}} style={{fontSize:'0.6rem',letterSpacing:'0.15em',textTransform:'uppercase',padding:'5px 10px',borderRadius:2,border:'1px solid rgba(232,226,217,0.3)',background:'rgba(10,10,10,0.6)',color:TXT,cursor:'pointer'}}>✉</button>
+              <button onClick={e=>sharePhoto(p.id,e)} style={{fontSize:'0.6rem',padding:'5px 10px',borderRadius:2,border:'1px solid rgba(232,226,217,0.3)',background:'rgba(10,10,10,0.6)',color:copiedId===p.id?C:TXT,cursor:'pointer'}}>{copiedId===p.id?'✓':'⎘'}</button>
+            </div>
             <button onClick={e=>toggleLike(p.id,e)} style={{display:'flex',alignItems:'center',gap:5,fontSize:'0.72rem',padding:'5px 10px',borderRadius:2,border:liked?'1px solid rgba(226,75,74,0.5)':'1px solid rgba(232,226,217,0.25)',background:'rgba(10,10,10,0.6)',color:liked?'#E24B4A':MUT,cursor:'pointer'}}>{liked?'♥':'♡'} {lc>0&&lc}</button>
           </div>
         </div>
@@ -429,7 +515,7 @@ export default function Home() {
   const Lightbox = () => {
     const arr = getDisplayPhotos()
     const idx = arr.findIndex(p=>p.id===lightbox.id)
-    const liked = isLiked(lightbox.id); const lc = likes[lightbox.id]||0
+    const liked = isLiked(lightbox.id); const lc = likes[lightbox.id]||0; const vc = views[lightbox.id]||0
     const prev = arr[(idx-1+arr.length)%arr.length]; const next = arr[(idx+1)%arr.length]
     const currentSer = series.find(s=>(s.photoIds||[]).includes(lightbox.id))
     return (
@@ -439,6 +525,7 @@ export default function Home() {
             <span style={{fontSize:'0.65rem',letterSpacing:'0.2em',textTransform:'uppercase',color:C}}>{lightbox.cat}</span>
             <span style={{fontSize:'0.65rem',color:MUT}}>{fmtDate(lightbox.date)}</span>
             {lightbox.location&&<span style={{fontSize:'0.65rem',color:MUT}}>📍 {lightbox.location}</span>}
+            {vc>0&&<span style={{fontSize:'0.65rem',color:MUT}}>👁 {vc}</span>}
           </div>
           <div style={{display:'flex',alignItems:'center',gap:12}}>
             {arr.length>1&&<span style={{fontSize:'0.65rem',color:MUT}}>{idx+1} / {arr.length}</span>}
@@ -448,20 +535,22 @@ export default function Home() {
         {arr.length>1&&<button onClick={()=>setLightbox(prev)} style={{position:'absolute',left:16,top:'50%',transform:'translateY(-50%)',width:52,height:52,borderRadius:'50%',border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(4px)',color:TXT,fontSize:'1.3rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:2}}>←</button>}
         {arr.length>1&&<button onClick={()=>setLightbox(next)} style={{position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',width:52,height:52,borderRadius:'50%',border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(4px)',color:TXT,fontSize:'1.3rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:2}}>→</button>}
         <img src={lightbox.url} alt={lightbox.title} draggable={false} style={{maxWidth:'calc(100vw - 140px)',maxHeight:'calc(100vh - 160px)',width:'auto',height:'auto',objectFit:'contain',pointerEvents:'none',userSelect:'none',borderRadius:2}}/>
-        <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'1.5rem 2rem',background:'linear-gradient(to top,rgba(0,0,0,0.85),transparent)',display:'flex',alignItems:'flex-end',justifyContent:'space-between',zIndex:2}}>
+        <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'1.5rem 2rem',background:'linear-gradient(to top,rgba(0,0,0,0.85),transparent)',display:'flex',alignItems:'flex-end',justifyContent:'space-between',zIndex:2,flexWrap:'wrap',gap:8}}>
           <div>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.5rem',fontWeight:300,marginBottom:4}}>{lightbox.title}</div>
             {lightbox.desc&&<div style={{fontSize:'0.8rem',color:MUT,maxWidth:600}}>{lightbox.desc}</div>}
           </div>
-          <div style={{display:'flex',gap:10,flexShrink:0,marginLeft:16}}>
-            <button onClick={e=>toggleLike(lightbox.id,e)} style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:liked?'1px solid rgba(226,75,74,0.5)':'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:liked?'#E24B4A':MUT,cursor:'pointer'}}>{liked?'♥':'♡'} {lc>0?`(${lc})`:''} Нравится</button>
+          <div style={{display:'flex',gap:8,flexShrink:0,flexWrap:'wrap'}}>
+            <button onClick={e=>toggleLike(lightbox.id,e)} style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:liked?'1px solid rgba(226,75,74,0.5)':'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:liked?'#E24B4A':MUT,cursor:'pointer'}}>{liked?'♥':'♡'}{lc>0?` (${lc})`:''}</button>
+            <button onClick={e=>sharePhoto(lightbox.id,e)} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:copiedId===lightbox.id?C:MUT,cursor:'pointer'}}>{copiedId===lightbox.id?'✓ Скопировано':'⎘ Поделиться'}</button>
+            <button onClick={()=>downloadWithWatermark(lightbox, about.name+' '+about.nameLast)} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:MUT,cursor:'pointer'}}>↓ Скачать</button>
             <button onClick={e=>{e.stopPropagation();setDlPhoto(lightbox);setShowDlModal(true)}} style={{fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:`1px solid ${C}`,background:'transparent',color:C,cursor:'pointer'}}>✉ Напиши мне</button>
             {isAdmin&&<div style={{display:'flex',gap:8}}>
               <button onClick={()=>{setEditingPhoto(lightbox);setShowEditPhoto(true)}} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:TXT,cursor:'pointer'}}>✏</button>
               <button onClick={()=>deletePhoto(lightbox.id)} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(226,75,74,0.3)',background:'rgba(0,0,0,0.5)',color:'#E24B4A',cursor:'pointer'}}>🗑</button>
             </div>}
             {isAdmin&&<div style={{position:'relative'}}>
-              <button onClick={()=>setShowSeriesPicker(p=>!p)} style={{fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:MUT,cursor:'pointer'}}>✏ {currentSer?currentSer.title:'Серия'}</button>
+              <button onClick={()=>setShowSeriesPicker(p=>!p)} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:MUT,cursor:'pointer'}}>✏ {currentSer?currentSer.title:'Серия'}</button>
               {showSeriesPicker&&<div style={{position:'absolute',bottom:'110%',right:0,background:'#1a1a1a',border:'1px solid rgba(232,226,217,0.15)',borderRadius:4,minWidth:200,zIndex:10,overflow:'hidden'}}>
                 <div onClick={()=>{assignSeriesToPhoto(lightbox.id,'');setShowSeriesPicker(false)}} style={{padding:'10px 14px',fontSize:'0.78rem',color:MUT,cursor:'pointer',borderBottom:'1px solid rgba(232,226,217,0.06)'}} onMouseEnter={e=>e.target.style.background='rgba(232,226,217,0.06)'} onMouseLeave={e=>e.target.style.background='transparent'}>— Без серии —</div>
                 {series.map(s=><div key={s.id} onClick={()=>{assignSeriesToPhoto(lightbox.id,s.id);setShowSeriesPicker(false)}} style={{padding:'10px 14px',fontSize:'0.78rem',color:s.id===currentSer?.id?C:TXT,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.background='rgba(232,226,217,0.06)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>{s.id===currentSer?.id?'✓ ':''}{s.title}</div>)}
@@ -490,6 +579,78 @@ export default function Home() {
 
     return (
       <div style={{background:BG,color:TXT,fontFamily:"'Jost',sans-serif",fontWeight:300}}>
+        {/* ── Global styles for cursor and hover zoom ── */}
+        <style>{`
+          * { cursor: none !important; }
+          .icon-thumb { transition: transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.35s ease; }
+          .icon-thumb:hover { transform: scale(1.08); box-shadow: 0 8px 32px rgba(0,0,0,0.6); z-index: 2; }
+        `}</style>
+
+        {/* ── Custom cursor ── */}
+        {!isMobile&&<>
+          <div style={{position:'fixed',left:cursorPos.x,top:cursorPos.y,width:cursorHover?36:14,height:cursorHover?36:14,borderRadius:'50%',border:`1.5px solid ${C}`,transform:'translate(-50%,-50%)',pointerEvents:'none',zIndex:9999,transition:'width 0.2s,height 0.2s,opacity 0.2s',opacity:0.85,mixBlendMode:'normal'}}/>
+          <div style={{position:'fixed',left:cursorPos.x,top:cursorPos.y,width:4,height:4,borderRadius:'50%',background:C,transform:'translate(-50%,-50%)',pointerEvents:'none',zIndex:9999}}/>
+        </>}
+
+        {/* ── Preloader ── */}
+        {!preloaderDone&&(
+          <div style={{position:'fixed',inset:0,zIndex:9000,background:BG,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,opacity:preloaderOut?0:1,transition:'opacity 0.6s ease',pointerEvents:preloaderOut?'none':'all'}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2rem':'3rem',fontWeight:300,letterSpacing:'0.15em',color:TXT,opacity:preloaderOut?0:1,transform:preloaderOut?'translateY(-10px)':'translateY(0)',transition:'all 0.5s ease'}}>
+              {about.name} <em style={{color:C,fontStyle:'italic'}}>{about.nameLast}</em>
+            </div>
+            <div style={{width:40,height:1,background:`linear-gradient(to right,transparent,${C},transparent)`,animation:'none'}}/>
+            <div style={{fontSize:'0.6rem',letterSpacing:'0.3em',textTransform:'uppercase',color:MUT}}>Фотограф</div>
+          </div>
+        )}
+
+        {/* ── Floating search button ── */}
+        <button onClick={()=>setShowSearchModal(true)}
+          style={{position:'fixed',bottom:isMobile?'1.5rem':'2rem',left:'50%',transform:'translateX(-50%)',zIndex:250,background:'rgba(10,10,10,0.75)',backdropFilter:'blur(12px)',border:`1px solid rgba(232,226,217,0.18)`,color:MUT,borderRadius:999,padding:'10px 22px',fontSize:'0.7rem',letterSpacing:'0.18em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:8,boxShadow:'0 4px 24px rgba(0,0,0,0.5)'}}>
+          <span style={{fontSize:'0.8rem'}}>🔍</span> Поиск
+        </button>
+
+        {/* ── Search modal ── */}
+        {showSearchModal&&(
+          <div style={{position:'fixed',inset:0,zIndex:2000,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(12px)',display:'flex',flexDirection:'column',alignItems:'center',paddingTop:'12vh'}} onClick={e=>e.target===e.currentTarget&&setShowSearchModal(false)}>
+            <div style={{width:'100%',maxWidth:560,padding:'0 1.5rem'}}>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.8rem',fontWeight:300,textAlign:'center',marginBottom:'1.5rem',color:TXT}}>Поиск фотографий</div>
+              <div style={{position:'relative',marginBottom:'1.5rem'}}>
+                <input autoFocus value={homeSearch} onChange={e=>setHomeSearch(e.target.value)}
+                  style={{width:'100%',padding:'14px 50px 14px 20px',fontSize:15,background:'rgba(255,255,255,0.06)',border:`1px solid rgba(232,226,217,0.2)`,borderRadius:4,color:TXT,outline:'none',fontFamily:"'Jost',sans-serif",boxSizing:'border-box'}}
+                  placeholder="Название, категория, место..."/>
+                <button onClick={()=>setShowSearchModal(false)} style={{position:'absolute',right:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:MUT,fontSize:'1.2rem',cursor:'pointer'}}>✕</button>
+              </div>
+              {homeSearch.trim()&&(()=>{
+                const results = photos.filter(p=>
+                  p.title?.toLowerCase().includes(homeSearch.toLowerCase())||
+                  p.cat?.toLowerCase().includes(homeSearch.toLowerCase())||
+                  p.location?.toLowerCase().includes(homeSearch.toLowerCase())||
+                  p.desc?.toLowerCase().includes(homeSearch.toLowerCase())
+                ).slice(0,8)
+                return (
+                  <div style={{display:'flex',flexDirection:'column',gap:2,maxHeight:'55vh',overflowY:'auto'}}>
+                    {results.length===0&&<div style={{color:MUT,textAlign:'center',padding:'2rem',fontSize:'0.85rem'}}>Ничего не найдено</div>}
+                    {results.map(p=>(
+                      <div key={p.id} onClick={()=>{incrementView(p.id);setLightbox(p);setShowSearchModal(false)}}
+                        style={{display:'flex',alignItems:'center',gap:14,padding:'10px 12px',borderRadius:3,background:'rgba(255,255,255,0.04)',cursor:'pointer',border:'1px solid rgba(232,226,217,0.08)'}}
+                        onMouseEnter={e=>e.currentTarget.style.background='rgba(200,169,110,0.08)'}
+                        onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.04)'}>
+                        <div style={{width:52,height:36,borderRadius:2,overflow:'hidden',flexShrink:0,background:'#1a1a1a'}}>
+                          {p.thumb&&<img src={p.thumb} alt="" style={{width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}}/>}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1rem',fontWeight:300,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.title}</div>
+                          <div style={{fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C,marginTop:2}}>{p.cat}{p.location?` · ${p.location}`:''}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        )}
+
         <Nav solid={false}/>
 
         {/* ── Dot навигация справа ── */}
@@ -588,9 +749,8 @@ export default function Home() {
                       const cover=ser.cover||ser.photos?.[0]?.url
                       return (
                         <div key={ser.id} onClick={()=>{setView('gallery');setGalleryTab('series');setActiveSeries(ser)}}
-                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}
-                          onMouseEnter={e=>{e.currentTarget.querySelector('.sov').style.background='rgba(0,0,0,0.35)'}}
-                          onMouseLeave={e=>{e.currentTarget.querySelector('.sov').style.background='rgba(0,0,0,0.55)'}}>
+                          className="icon-thumb"
+                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
                           {cover&&<img src={cover} alt={ser.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
                           <div className="sov" style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',transition:'background 0.3s',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.5rem 0.6rem'}}>
                             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ser.title}</div>
@@ -621,9 +781,8 @@ export default function Home() {
                       const cover = catPhotos[0]?.url
                       return (
                         <div key={cat} onClick={()=>{setFilterCat(cat);setView('gallery');setGalleryTab('all')}}
-                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}
-                          onMouseEnter={e=>{e.currentTarget.querySelector('.cov').style.background='rgba(0,0,0,0.35)'}}
-                          onMouseLeave={e=>{e.currentTarget.querySelector('.cov').style.background='rgba(0,0,0,0.55)'}}>
+                          className="icon-thumb"
+                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
                           {cover&&<img src={cover} alt={cat} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
                           <div className="cov" style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',transition:'background 0.3s',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.5rem 0.6rem'}}>
                             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{cat}</div>
