@@ -473,7 +473,6 @@ export default function Home() {
           <div className="rv" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:6,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.08s'}}>
             <div style={{display:'flex',gap:5}}>
               <button onClick={e=>{e.stopPropagation();setDlPhoto(p);setShowDlModal(true)}} style={{fontSize:'0.6rem',letterSpacing:'0.15em',textTransform:'uppercase',padding:'5px 10px',borderRadius:2,border:'1px solid rgba(232,226,217,0.3)',background:'rgba(10,10,10,0.6)',color:TXT,cursor:'pointer'}}>✉</button>
-              <button onClick={e=>sharePhoto(p.id,e)} style={{fontSize:'0.6rem',padding:'5px 10px',borderRadius:2,border:'1px solid rgba(232,226,217,0.3)',background:'rgba(10,10,10,0.6)',color:copiedId===p.id?C:TXT,cursor:'pointer'}}>{copiedId===p.id?'✓':'⎘'}</button>
             </div>
             <button onClick={e=>toggleLike(p.id,e)} style={{display:'flex',alignItems:'center',gap:5,fontSize:'0.72rem',padding:'5px 10px',borderRadius:2,border:liked?'1px solid rgba(226,75,74,0.5)':'1px solid rgba(232,226,217,0.25)',background:'rgba(10,10,10,0.6)',color:liked?'#E24B4A':MUT,cursor:'pointer'}}>{liked?'♥':'♡'} {lc>0&&lc}</button>
           </div>
@@ -542,7 +541,6 @@ export default function Home() {
           </div>
           <div style={{display:'flex',gap:8,flexShrink:0,flexWrap:'wrap'}}>
             <button onClick={e=>toggleLike(lightbox.id,e)} style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:liked?'1px solid rgba(226,75,74,0.5)':'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:liked?'#E24B4A':MUT,cursor:'pointer'}}>{liked?'♥':'♡'}{lc>0?` (${lc})`:''}</button>
-            <button onClick={e=>sharePhoto(lightbox.id,e)} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:copiedId===lightbox.id?C:MUT,cursor:'pointer'}}>{copiedId===lightbox.id?'✓ Скопировано':'⎘ Поделиться'}</button>
             {isAdmin&&<button onClick={()=>downloadWithWatermark(lightbox, about.name+' '+about.nameLast)} style={{fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:MUT,cursor:'pointer'}}>↓ Скачать</button>}
             <button onClick={e=>{e.stopPropagation();setDlPhoto(lightbox);setShowDlModal(true)}} style={{fontSize:'0.75rem',padding:'8px 18px',borderRadius:2,border:`1px solid ${C}`,background:'transparent',color:C,cursor:'pointer'}}>✉ Напиши мне</button>
             {isAdmin&&<div style={{display:'flex',gap:8}}>
@@ -1181,15 +1179,24 @@ export default function Home() {
   }
 
   function SeriesEditModal() {
-    const [form,setForm]=useState(editingSeries?{title:editingSeries.title,desc:editingSeries.desc||''}:{title:'',desc:''})
+    const titleRef = useRef(editingSeries?.title||'')
+    const descRef = useRef(editingSeries?.desc||'')
+    const [titleVal, setTitleVal] = useState(editingSeries?.title||'')
+    const [descVal, setDescVal] = useState(editingSeries?.desc||'')
     const [sel,setSel]=useState(editingSeries?.photoIds||[])
     return (
       <div style={MB} onClick={e=>e.target===e.currentTarget&&setShowSeriesEdit(false)}>
         <div style={{...MBX,width:560,maxWidth:'100%'}}>
           <button style={closeX} onClick={()=>setShowSeriesEdit(false)}>✕</button>
           <div style={mTitle}>{editingSeries?'Редактировать серию':'Новая серия'}</div>
-          <div style={{marginBottom:'1rem'}}><label style={mLabel}>Название</label><input style={mInput} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Напр. Мальдивы 2022"/></div>
-          <div style={{marginBottom:'1rem'}}><label style={mLabel}>Описание</label><input style={mInput} value={form.desc} onChange={e=>setForm(f=>({...f,desc:e.target.value}))} placeholder="Краткое описание..."/></div>
+          <div style={{marginBottom:'1rem'}}>
+            <label style={mLabel}>Название</label>
+            <input style={mInput} value={titleVal} onChange={e=>setTitleVal(e.target.value)} placeholder="Напр. Мальдивы 2022"/>
+          </div>
+          <div style={{marginBottom:'1rem'}}>
+            <label style={mLabel}>Описание</label>
+            <input style={mInput} value={descVal} onChange={e=>setDescVal(e.target.value)} placeholder="Краткое описание..."/>
+          </div>
           <div style={{marginBottom:'1rem'}}>
             <label style={mLabel}>Выбери фотографии ({sel.length} выбрано)</label>
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,maxHeight:200,overflowY:'auto'}}>
@@ -1205,9 +1212,9 @@ export default function Home() {
             {editingSeries&&<button style={{...btnCancel,color:'#E24B4A',borderColor:'rgba(226,75,74,0.3)'}} onClick={async()=>{const u=series.filter(s=>s.id!==editingSeries.id);setSeries(u);await saveSeries(u);setShowSeriesEdit(false)}}>Удалить</button>}
             <button style={btnCancel} onClick={()=>setShowSeriesEdit(false)}>Отмена</button>
             <button style={btnSave} onClick={()=>{
-              if(!form.title.trim()) return
+              if(!titleVal.trim()) return
               const cover=photos.find(p=>sel.includes(p.id))?.url||''
-              const upd=editingSeries?series.map(s=>s.id===editingSeries.id?{...s,...form,photoIds:sel,cover:cover||s.cover}:s):[...series,{id:Date.now().toString(),...form,photoIds:sel,cover}]
+              const upd=editingSeries?series.map(s=>s.id===editingSeries.id?{...s,title:titleVal,desc:descVal,photoIds:sel,cover:cover||s.cover}:s):[...series,{id:Date.now().toString(),title:titleVal,desc:descVal,photoIds:sel,cover}]
               setSeries(upd); saveSeries(upd); setShowSeriesEdit(false)
             }}>Сохранить</button>
           </div>
