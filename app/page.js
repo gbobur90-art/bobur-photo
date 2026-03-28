@@ -480,8 +480,8 @@ export default function Home() {
     const seriesData = series.map(ser=>({...ser, photos:photos.filter(p=>(ser.photoIds||[]).includes(p.id))}))
     const activeCats = cats.filter(cat=>photos.filter(p=>p.cat===cat).length>0)
     const hasSeriesSection = seriesData.length > 0
-    // sections: [0]=слайдер, [1]=серии?, [2..n]=категории, [last]=автор
-    const sectionLabels = ['Главная', ...(hasSeriesSection?['Серии']:[]), ...activeCats, 'Об авторе']
+    // sections: [0]=слайдер, [1]=серии?, [2]=категории?, [last]=автор
+    const sectionLabels = ['Главная', ...(hasSeriesSection?['Серии']:[]), ...(activeCats.length>0?['Категории']:[]), 'Об авторе']
 
     function scrollTo(idx) {
       const el = document.getElementById(`sec-${idx}`)
@@ -605,36 +605,42 @@ export default function Home() {
             )
           })()}
 
-          {/* ── Секции категорий (sec-2, sec-3, ...) ── */}
-          {activeCats.map((cat, catIdx)=>{
-            const catPhotos = photos.filter(p=>p.cat===cat)
-            const secIdx = catIdx + (hasSeriesSection?2:1)
-            const cover = catPhotos[0]
+          {/* ── Секция категорий (одна, мелкие иконки) ── */}
+          {activeCats.length>0&&(()=>{
+            const secIdx = hasSeriesSection?2:1
             return (
-              <section key={cat} id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',position:'relative',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',overflow:'hidden'}}>
-                {cover?.url&&<div style={{position:'absolute',inset:0,backgroundImage:`url(${cover.url})`,backgroundSize:'cover',backgroundPosition:'center',filter:'blur(60px)',opacity:0.05,transform:'scale(1.2)'}}/>}
+              <section id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
                 <div style={{position:'relative',zIndex:1}}>
-                  <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',marginBottom:'2rem',flexWrap:'wrap',gap:12}}>
-                    <div>
-                      <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>Категория · {catPhotos.length} фото</div>
-                      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2.5rem':'4rem',fontWeight:300,lineHeight:1}}>{cat}</div>
-                    </div>
-                    <button onClick={()=>{setFilterCat(cat);setView('gallery');setGalleryTab('all')}}
-                      style={{fontSize:'0.65rem',letterSpacing:'0.18em',textTransform:'uppercase',background:'transparent',border:`1px solid ${C}`,color:C,padding:'8px 20px',borderRadius:2,cursor:'pointer',flexShrink:0,marginBottom:6}}>
-                      Смотреть все →
-                    </button>
+                  <div style={{marginBottom:'2rem'}}>
+                    <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>Темы · {activeCats.length} категорий</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2.5rem':'4rem',fontWeight:300,lineHeight:1}}>Категории</div>
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'repeat(3,1fr)',gap:'2px'}}>
-                    {catPhotos.slice(0,isMobile?4:6).map(p=><PhotoCard key={p.id} p={p}/>)}
+                  <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(3,1fr)':'repeat(auto-fill,minmax(130px,1fr))',gap:isMobile?'0.6rem':'0.75rem'}}>
+                    {activeCats.map(cat=>{
+                      const catPhotos = photos.filter(p=>p.cat===cat)
+                      const cover = catPhotos[0]?.url
+                      return (
+                        <div key={cat} onClick={()=>{setFilterCat(cat);setView('gallery');setGalleryTab('all')}}
+                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}
+                          onMouseEnter={e=>{e.currentTarget.querySelector('.cov').style.background='rgba(0,0,0,0.35)'}}
+                          onMouseLeave={e=>{e.currentTarget.querySelector('.cov').style.background='rgba(0,0,0,0.55)'}}>
+                          {cover&&<img src={cover} alt={cat} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
+                          <div className="cov" style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',transition:'background 0.3s',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.5rem 0.6rem'}}>
+                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{cat}</div>
+                            <div style={{fontSize:'0.55rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:2,opacity:0.9}}>{catPhotos.length} фото</div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </section>
             )
-          })}
+          })()}
 
           {/* ── Секция об авторе ── */}
           {(()=>{
-            const secIdx = activeCats.length + (hasSeriesSection?2:1)
+            const secIdx = (hasSeriesSection?2:1) + (activeCats.length>0?1:0)
             return (
               <section id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',alignItems:'center',justifyContent:'center',padding:isMobile?'5rem 1.25rem 3rem':'4rem 3rem',position:'relative',overflow:'hidden'}}>
                 {avatarUrl&&<div style={{position:'absolute',inset:0,backgroundImage:`url(${avatarUrl})`,backgroundSize:'cover',backgroundPosition:'center top',filter:'blur(60px)',opacity:0.07,transform:'scale(1.1)'}}/>}
