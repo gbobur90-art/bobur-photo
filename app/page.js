@@ -480,8 +480,8 @@ export default function Home() {
     const seriesData = series.map(ser=>({...ser, photos:photos.filter(p=>(ser.photoIds||[]).includes(p.id))}))
     const activeCats = cats.filter(cat=>photos.filter(p=>p.cat===cat).length>0)
     const hasSeriesSection = seriesData.length > 0
-    // sections: [0]=слайдер, [1..n]=категории, [n+1]=серии?, [last]=автор
-    const sectionLabels = ['Главная', ...activeCats, ...(hasSeriesSection?['Серии']:[]), 'Об авторе']
+    // sections: [0]=слайдер, [1]=серии?, [2..n]=категории, [last]=автор
+    const sectionLabels = ['Главная', ...(hasSeriesSection?['Серии']:[]), ...activeCats, 'Об авторе']
 
     function scrollTo(idx) {
       const el = document.getElementById(`sec-${idx}`)
@@ -573,10 +573,42 @@ export default function Home() {
             </div>
           </section>
 
-          {/* ── Секции категорий ── */}
+          {/* ── Секция серий (sec-1) ── */}
+          {hasSeriesSection&&(()=>{
+            return (
+              <section id="sec-1" style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
+                <div style={{position:'relative',zIndex:1}}>
+                  <div style={{marginBottom:'2rem'}}>
+                    <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>Коллекции · {seriesData.length} серий</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2.5rem':'4rem',fontWeight:300,lineHeight:1}}>Серии</div>
+                  </div>
+                  {/* Все серии — мелкие иконки */}
+                  <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(3,1fr)':'repeat(auto-fill,minmax(130px,1fr))',gap:isMobile?'0.6rem':'0.75rem'}}>
+                    {seriesData.map(ser=>{
+                      const cover=ser.cover||ser.photos?.[0]?.url
+                      return (
+                        <div key={ser.id} onClick={()=>{setView('gallery');setGalleryTab('series');setActiveSeries(ser)}}
+                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}
+                          onMouseEnter={e=>{e.currentTarget.querySelector('.sov').style.background='rgba(0,0,0,0.35)'}}
+                          onMouseLeave={e=>{e.currentTarget.querySelector('.sov').style.background='rgba(0,0,0,0.55)'}}>
+                          {cover&&<img src={cover} alt={ser.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
+                          <div className="sov" style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',transition:'background 0.3s',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.5rem 0.6rem'}}>
+                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ser.title}</div>
+                            <div style={{fontSize:'0.55rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:2,opacity:0.9}}>{ser.photos?.length||0} фото</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </section>
+            )
+          })()}
+
+          {/* ── Секции категорий (sec-2, sec-3, ...) ── */}
           {activeCats.map((cat, catIdx)=>{
             const catPhotos = photos.filter(p=>p.cat===cat)
-            const secIdx = catIdx + 1
+            const secIdx = catIdx + (hasSeriesSection?2:1)
             const cover = catPhotos[0]
             return (
               <section key={cat} id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',position:'relative',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',overflow:'hidden'}}>
@@ -599,42 +631,6 @@ export default function Home() {
               </section>
             )
           })}
-
-          {/* ── Секция серий ── */}
-          {hasSeriesSection&&(()=>{
-            const secIdx = activeCats.length + 1
-            return (
-              <section id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
-                <div style={{position:'relative',zIndex:1}}>
-                  <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',marginBottom:'2rem',flexWrap:'wrap',gap:12}}>
-                    <div>
-                      <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>Коллекции · {seriesData.length} серий</div>
-                      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2.5rem':'4rem',fontWeight:300,lineHeight:1}}>Серии</div>
-                    </div>
-                    <button onClick={()=>{setView('gallery');setGalleryTab('series')}}
-                      style={{fontSize:'0.65rem',letterSpacing:'0.18em',textTransform:'uppercase',background:'transparent',border:`1px solid ${C}`,color:C,padding:'8px 20px',borderRadius:2,cursor:'pointer',flexShrink:0,marginBottom:6}}>
-                      Все серии →
-                    </button>
-                  </div>
-                  <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(auto-fill,minmax(280px,1fr))',gap:'1.5rem'}}>
-                    {seriesData.slice(0,isMobile?3:6).map(ser=>{
-                      const cover=ser.cover||ser.photos?.[0]?.url
-                      return (
-                        <div key={ser.id} onClick={()=>{setView('gallery');setGalleryTab('series');setActiveSeries(ser)}}
-                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'4/3',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
-                          {cover&&<img src={cover} alt={ser.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
-                          <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,0.8) 0%,rgba(0,0,0,0.1) 60%)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'1.25rem'}}>
-                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.3rem',fontWeight:300}}>{ser.title}</div>
-                            <div style={{fontSize:'0.6rem',letterSpacing:'0.18em',textTransform:'uppercase',color:C,marginTop:3}}>{ser.photos?.length||0} фото</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </section>
-            )
-          })()}
 
           {/* ── Секция об авторе ── */}
           {(()=>{
