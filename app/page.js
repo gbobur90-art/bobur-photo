@@ -6,26 +6,36 @@ const MONTHS = ['января','февраля','марта','апреля','м�
 function fmtDate(d) { if(!d) return ''; try { const dt=new Date(d); return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}` } catch { return d } }
 function shuffle(arr) { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}; return a }
 
-function SeriesEditModalComponent({editingSeries, photos, series, setSeries, saveSeries, setShowSeriesEdit, MB, MBX, mTitle, closeX, mInput, mLabel, btnSave, btnCancel, C, BG}) {
-  const [titleVal, setTitleVal] = useState(editingSeries?.title||'')
-  const [descVal, setDescVal] = useState(editingSeries?.desc||'')
+// ── Глобальные стили ──
+const C='#c8a96e', MUT='rgba(232,226,217,0.45)', BG='#0a0a0a', TXT='#e8e2d9'
+const S_INPUT = {width:'100%',padding:'8px 10px',fontSize:13,background:'#1a1a1a',border:'1px solid rgba(232,226,217,0.12)',borderRadius:2,color:TXT,outline:'none',fontFamily:"'Jost',sans-serif",boxSizing:'border-box'}
+const S_LABEL = {display:'block',fontSize:'0.65rem',letterSpacing:'0.18em',textTransform:'uppercase',color:MUT,marginBottom:4}
+const S_BTN_SAVE = {padding:'7px 20px',fontSize:'0.75rem',letterSpacing:'0.14em',textTransform:'uppercase',background:C,border:'none',color:BG,cursor:'pointer',borderRadius:2,fontWeight:400}
+const S_BTN_CANCEL = {padding:'7px 16px',fontSize:'0.75rem',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'transparent',color:MUT,cursor:'pointer'}
+const S_MB = {position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.92)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}
+const S_MBX = {background:'#111',border:'1px solid rgba(232,226,217,0.1)',borderRadius:4,padding:'2.5rem',width:460,maxWidth:'100%',position:'relative',maxHeight:'90vh',overflowY:'auto'}
+const S_TITLE = {fontFamily:"'Cormorant Garamond',serif",fontSize:'1.5rem',fontWeight:300,marginBottom:'1.5rem'}
+const S_CLOSE = {position:'absolute',top:12,right:14,background:'none',border:'none',color:MUT,fontSize:'1.2rem',cursor:'pointer'}
+
+function SeriesEditModalComponent({editingSeries, photos, series, setSeries, saveSeries, setShowSeriesEdit}) {
+  const [title, setTitle] = useState(editingSeries?.title||'')
+  const [desc, setDesc] = useState(editingSeries?.desc||'')
   const [sel, setSel] = useState(editingSeries?.photoIds||[])
-  const TXT = '#e8e2d9', MUT = 'rgba(232,226,217,0.45)'
   return (
-    <div style={MB} onClick={e=>e.target===e.currentTarget&&setShowSeriesEdit(false)}>
-      <div style={{...MBX,width:560,maxWidth:'100%'}}>
-        <button style={closeX} onClick={()=>setShowSeriesEdit(false)}>✕</button>
-        <div style={mTitle}>{editingSeries?'Редактировать серию':'Новая серия'}</div>
+    <div style={S_MB} onClick={e=>e.target===e.currentTarget&&setShowSeriesEdit(false)}>
+      <div style={{...S_MBX,width:560,maxWidth:'100%'}}>
+        <button style={S_CLOSE} onClick={()=>setShowSeriesEdit(false)}>✕</button>
+        <div style={S_TITLE}>{editingSeries?'Редактировать серию':'Новая серия'}</div>
         <div style={{marginBottom:'1rem'}}>
-          <label style={mLabel}>Название</label>
-          <input autoFocus={!!editingSeries} style={mInput} value={titleVal} onChange={e=>setTitleVal(e.target.value)} placeholder="Напр. Мальдивы 2022"/>
+          <label style={S_LABEL}>Название</label>
+          <input style={S_INPUT} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Напр. Мальдивы 2022" autoFocus/>
         </div>
         <div style={{marginBottom:'1rem'}}>
-          <label style={mLabel}>Описание</label>
-          <input style={mInput} value={descVal} onChange={e=>setDescVal(e.target.value)} placeholder="Краткое описание..."/>
+          <label style={S_LABEL}>Описание</label>
+          <input style={S_INPUT} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Краткое описание..."/>
         </div>
         <div style={{marginBottom:'1rem'}}>
-          <label style={mLabel}>Выбери фотографии ({sel.length} выбрано)</label>
+          <label style={S_LABEL}>Выбери фотографии ({sel.length} выбрано)</label>
           <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,maxHeight:200,overflowY:'auto'}}>
             {photos.map(p=>(
               <div key={p.id} onClick={()=>setSel(prev=>prev.includes(p.id)?prev.filter(x=>x!==p.id):[...prev,p.id])}
@@ -37,14 +47,19 @@ function SeriesEditModalComponent({editingSeries, photos, series, setSeries, sav
           </div>
         </div>
         <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:'1.25rem'}}>
-          {editingSeries&&<button style={{...btnCancel,color:'#E24B4A',borderColor:'rgba(226,75,74,0.3)'}} onClick={async()=>{const u=series.filter(s=>s.id!==editingSeries.id);setSeries(u);await saveSeries(u);setShowSeriesEdit(false)}}>Удалить</button>}
-          <button style={btnCancel} onClick={()=>setShowSeriesEdit(false)}>Отмена</button>
-          <button style={btnSave} onClick={()=>{
-            if(!titleVal.trim()) return
+          {editingSeries&&(
+            <button style={{...S_BTN_CANCEL,color:'#E24B4A',borderColor:'rgba(226,75,74,0.3)'}}
+              onClick={async()=>{const u=series.filter(s=>s.id!==editingSeries.id);setSeries(u);await saveSeries(u);setShowSeriesEdit(false)}}>
+              Удалить
+            </button>
+          )}
+          <button style={S_BTN_CANCEL} onClick={()=>setShowSeriesEdit(false)}>Отмена</button>
+          <button style={S_BTN_SAVE} onClick={()=>{
+            if(!title.trim()) return
             const cover=photos.find(p=>sel.includes(p.id))?.url||''
             const upd=editingSeries
-              ?series.map(s=>s.id===editingSeries.id?{...s,title:titleVal,desc:descVal,photoIds:sel,cover:cover||s.cover}:s)
-              :[...series,{id:Date.now().toString(),title:titleVal,desc:descVal,photoIds:sel,cover}]
+              ?series.map(s=>s.id===editingSeries.id?{...s,title,desc,photoIds:sel,cover:cover||s.cover}:s)
+              :[...series,{id:Date.now().toString(),title,desc,photoIds:sel,cover}]
             setSeries(upd); saveSeries(upd); setShowSeriesEdit(false)
           }}>Сохранить</button>
         </div>
@@ -52,6 +67,7 @@ function SeriesEditModalComponent({editingSeries, photos, series, setSeries, sav
     </div>
   )
 }
+
 
 export default function Home() {
   const [photos, setPhotos] = useState([])
@@ -453,15 +469,14 @@ export default function Home() {
     }
   }
 
-  const C='#c8a96e', MUT='rgba(232,226,217,0.45)', BG='#0a0a0a', TXT='#e8e2d9'
-  const mInput = {width:'100%',padding:'8px 10px',fontSize:13,background:'#1a1a1a',border:'1px solid rgba(232,226,217,0.12)',borderRadius:2,color:TXT,outline:'none',fontFamily:"'Jost',sans-serif"}
-  const mLabel = {display:'block',fontSize:'0.65rem',letterSpacing:'0.18em',textTransform:'uppercase',color:MUT,marginBottom:4}
-  const btnSave = {padding:'7px 20px',fontSize:'0.75rem',letterSpacing:'0.14em',textTransform:'uppercase',background:C,border:'none',color:BG,cursor:'pointer',borderRadius:2,fontWeight:400}
-  const btnCancel = {padding:'7px 16px',fontSize:'0.75rem',borderRadius:2,border:'1px solid rgba(232,226,217,0.2)',background:'transparent',color:MUT,cursor:'pointer'}
-  const MB = {position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.92)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}
-  const MBX = {background:'#111',border:'1px solid rgba(232,226,217,0.1)',borderRadius:4,padding:'2.5rem',width:460,maxWidth:'100%',position:'relative',maxHeight:'90vh',overflowY:'auto'}
-  const mTitle = {fontFamily:"'Cormorant Garamond',serif",fontSize:'1.5rem',fontWeight:300,marginBottom:'1.5rem'}
-  const closeX = {position:'absolute',top:12,right:14,background:'none',border:'none',color:MUT,fontSize:'1.2rem',cursor:'pointer'}
+  const mInput = S_INPUT
+  const mLabel = S_LABEL
+  const btnSave = S_BTN_SAVE
+  const btnCancel = S_BTN_CANCEL
+  const MB = S_MB
+  const MBX = S_MBX
+  const mTitle = S_TITLE
+  const closeX = S_CLOSE
 
   const [mobileMenu, setMobileMenu] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -1234,9 +1249,6 @@ export default function Home() {
         setSeries={setSeries}
         saveSeries={saveSeries}
         setShowSeriesEdit={setShowSeriesEdit}
-        MB={MB} MBX={MBX} mTitle={mTitle} closeX={closeX}
-        mInput={mInput} mLabel={mLabel} btnSave={btnSave} btnCancel={btnCancel}
-        C={C} BG={BG}
       />
     )
   }
