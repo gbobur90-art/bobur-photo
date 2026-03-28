@@ -122,8 +122,7 @@ export default function Home() {
   const [currentSection, setCurrentSection] = useState(0)
   const [preloaderDone, setPreloaderDone] = useState(false)
   const [preloaderOut, setPreloaderOut] = useState(false)
-  const [cursorPos, setCursorPos] = useState({x:-100,y:-100})
-  const [cursorHover, setCursorHover] = useState(false)
+  const [theme, setTheme] = useState('warm') // warm | cool
   const [views, setViews] = useState({})
   const [showSearchModal, setShowSearchModal] = useState(false)
   const [homeSearch, setHomeSearch] = useState('')
@@ -143,17 +142,6 @@ export default function Home() {
     const t1 = setTimeout(() => setPreloaderOut(true), 1800)
     const t2 = setTimeout(() => setPreloaderDone(true), 2400)
     return () => { clearTimeout(t1); clearTimeout(t2) }
-  }, [])
-
-  // Custom cursor
-  useEffect(() => {
-    const move = (e) => setCursorPos({x:e.clientX, y:e.clientY})
-    const over = (e) => { if(e.target.closest('button')||e.target.closest('a')||e.target.closest('[data-hover]')) setCursorHover(true) }
-    const out = () => setCursorHover(false)
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseover', over)
-    window.addEventListener('mouseout', out)
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseover', over); window.removeEventListener('mouseout', out) }
   }, [])
 
   // Views counter
@@ -543,9 +531,54 @@ export default function Home() {
     )
   }
 
+  // Тема — тёплая / холодная
+  const ACCENT = theme==='warm' ? '#c8a96e' : '#7eb8d4'
+  const BG_T   = theme==='warm' ? '#0a0a0a' : '#07090f'
+  const TXT_T  = theme==='warm' ? '#e8e2d9' : '#d4e4f0'
+  const MUT_T  = theme==='warm' ? 'rgba(232,226,217,0.45)' : 'rgba(180,210,230,0.45)'
+
+  // Masonry сетка
+  const MasonryGrid = ({list}) => {
+    const cols = isMobile ? 2 : 3
+    const columns = Array.from({length:cols}, () => [])
+    list.forEach((p, i) => columns[i % cols].push(p))
+    return (
+      <div style={{display:'grid', gridTemplateColumns:`repeat(${cols},1fr)`, gap:'2px', alignItems:'start'}}>
+        {columns.map((col, ci) => (
+          <div key={ci} style={{display:'flex', flexDirection:'column', gap:'2px'}}>
+            {col.map(p => {
+              const liked = isLiked(p.id); const lc = likes[p.id]||0; const vc = views[p.id]||0
+              const ratio = (ci+1)%3===0 ? '2/3' : (ci+1)%3===1 ? '3/4' : '3/2'
+              return (
+                <div key={p.id} style={{position:'relative',aspectRatio:ratio,overflow:'hidden',cursor:'zoom-in',background:'#111'}}
+                  onMouseEnter={e=>{e.currentTarget.querySelector('.ov').style.background='rgba(0,0,0,0.5)';e.currentTarget.querySelectorAll('.rv').forEach(el=>{el.style.opacity='1';el.style.transform='translateY(0)'})}}
+                  onMouseLeave={e=>{e.currentTarget.querySelector('.ov').style.background='rgba(0,0,0,0)';e.currentTarget.querySelectorAll('.rv').forEach(el=>{el.style.opacity='0';el.style.transform='translateY(8px)'})}}
+                  onClick={()=>{incrementView(p.id);setLightbox(p)}}>
+                  {p.url?<img src={p.url} alt={p.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none',userSelect:'none'}} draggable={false}/>:<div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}/>}
+                  <div style={{position:'absolute',top:8,right:8,display:'flex',gap:4,zIndex:2}}>
+                    {vc>0&&<div style={{background:'rgba(10,10,10,0.7)',backdropFilter:'blur(4px)',borderRadius:999,padding:'2px 7px',fontSize:'0.6rem',color:MUT_T}}>👁 {vc}</div>}
+                    {lc>0&&<div style={{background:'rgba(10,10,10,0.75)',backdropFilter:'blur(4px)',border:'1px solid rgba(226,75,74,0.4)',borderRadius:999,padding:'2px 7px',fontSize:'0.6rem',color:'#E24B4A'}}>♥ {lc}</div>}
+                  </div>
+                  <div className="ov" style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.75rem',background:'rgba(0,0,0,0)',transition:'background 0.3s',zIndex:1}}>
+                    <div className="rv" style={{fontSize:'0.58rem',letterSpacing:'0.2em',textTransform:'uppercase',color:ACCENT,marginBottom:2,opacity:0,transform:'translateY(8px)',transition:'all 0.3s'}}>{p.cat}</div>
+                    <div className="rv" style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'0.9rem',fontWeight:300,color:TXT_T,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.04s'}}>{p.title}</div>
+                    <div className="rv" style={{display:'flex',gap:5,marginTop:5,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.08s'}}>
+                      <button onClick={e=>{e.stopPropagation();setDlPhoto(p);setShowDlModal(true)}} style={{fontSize:'0.58rem',padding:'4px 8px',borderRadius:2,border:'1px solid rgba(232,226,217,0.3)',background:'rgba(10,10,10,0.6)',color:TXT_T,cursor:'pointer'}}>✉</button>
+                      <button onClick={e=>toggleLike(p.id,e)} style={{fontSize:'0.58rem',padding:'4px 8px',borderRadius:2,border:liked?'1px solid rgba(226,75,74,0.5)':'1px solid rgba(232,226,217,0.25)',background:'rgba(10,10,10,0.6)',color:liked?'#E24B4A':MUT_T,cursor:'pointer'}}>{liked?'♥':'♡'}</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   const PhotoGrid = ({list}) => (
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:'2px'}}>
-      {list.length===0&&<div style={{color:MUT,padding:'4rem',gridColumn:'1/-1',textAlign:'center'}}>Нет фотографий</div>}
+      {list.length===0&&<div style={{color:MUT_T,padding:'4rem',gridColumn:'1/-1',textAlign:'center'}}>Нет фотографий</div>}
       {list.map(p=><PhotoCard key={p.id} p={p}/>)}
     </div>
   )
@@ -638,19 +671,14 @@ export default function Home() {
     }
 
     return (
-      <div style={{background:BG,color:TXT,fontFamily:"'Jost',sans-serif",fontWeight:300}}>
-        {/* ── Global styles for cursor and hover zoom ── */}
+      <div style={{background:BG_T,color:TXT_T,fontFamily:"'Jost',sans-serif",fontWeight:300}}>
+        {/* ── Global styles ── */}
         <style>{`
-          * { cursor: none !important; }
           .icon-thumb { transition: transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.35s ease; }
           .icon-thumb:hover { transform: scale(1.08); box-shadow: 0 8px 32px rgba(0,0,0,0.6); z-index: 2; }
+          @keyframes fadeUp { from { opacity:0; transform:translateY(32px); } to { opacity:1; transform:translateY(0); } }
+          .fade-section { animation: fadeUp 0.7s ease forwards; }
         `}</style>
-
-        {/* ── Custom cursor ── */}
-        {!isMobile&&<>
-          <div style={{position:'fixed',left:cursorPos.x,top:cursorPos.y,width:cursorHover?36:14,height:cursorHover?36:14,borderRadius:'50%',border:`1.5px solid ${C}`,transform:'translate(-50%,-50%)',pointerEvents:'none',zIndex:9999,transition:'width 0.2s,height 0.2s,opacity 0.2s',opacity:0.85,mixBlendMode:'normal'}}/>
-          <div style={{position:'fixed',left:cursorPos.x,top:cursorPos.y,width:4,height:4,borderRadius:'50%',background:C,transform:'translate(-50%,-50%)',pointerEvents:'none',zIndex:9999}}/>
-        </>}
 
         {/* ── Preloader ── */}
         {!preloaderDone&&(
@@ -712,6 +740,12 @@ export default function Home() {
         )}
 
         <Nav solid={false}/>
+
+        {/* ── Переключатель темы ── */}
+        <button onClick={()=>setTheme(t=>t==='warm'?'cool':'warm')}
+          style={{position:'fixed',top:isMobile?'auto':'1rem',bottom:isMobile?'5rem':'auto',right:isMobile?'1rem':'5rem',zIndex:300,background:'rgba(10,10,10,0.6)',backdropFilter:'blur(8px)',border:`1px solid ${ACCENT}44`,borderRadius:999,padding:'6px 14px',fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:ACCENT,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+          {theme==='warm'?'☀ Тёплая':'❄ Холодная'}
+        </button>
 
         {/* ── Dot навигация справа ── */}
         <div style={{position:'fixed',right:isMobile?6:18,top:'50%',transform:'translateY(-50%)',zIndex:300,display:'flex',flexDirection:'column',gap:8}}>
@@ -797,7 +831,7 @@ export default function Home() {
           {/* ── Секция серий (sec-1) ── */}
           {hasSeriesSection&&(()=>{
             return (
-              <section id="sec-1" style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
+              <section id="sec-1" className={currentSection===1?'fade-section':''} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
                 <div style={{position:'relative',zIndex:1}}>
                   <div style={{marginBottom:'2rem'}}>
                     <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>Коллекции · {seriesData.length} серий</div>
@@ -829,7 +863,7 @@ export default function Home() {
           {activeCats.length>0&&(()=>{
             const secIdx = hasSeriesSection?2:1
             return (
-              <section id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
+              <section id={`sec-${secIdx}`} className={currentSection===secIdx?'fade-section':''} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
                 <div style={{position:'relative',zIndex:1}}>
                   <div style={{marginBottom:'2rem'}}>
                     <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>Темы · {activeCats.length} категорий</div>
@@ -861,7 +895,7 @@ export default function Home() {
           {(()=>{
             const secIdx = (hasSeriesSection?2:1) + (activeCats.length>0?1:0)
             return (
-              <section id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',alignItems:'center',justifyContent:'center',padding:isMobile?'5rem 1.25rem 3rem':'4rem 3rem',position:'relative',overflow:'hidden'}}>
+              <section id={`sec-${secIdx}`} className={currentSection===secIdx?'fade-section':''} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',alignItems:'center',justifyContent:'center',padding:isMobile?'5rem 1.25rem 3rem':'4rem 3rem',position:'relative',overflow:'hidden'}}>
                 {avatarUrl&&<div style={{position:'absolute',inset:0,backgroundImage:`url(${avatarUrl})`,backgroundSize:'cover',backgroundPosition:'center top',filter:'blur(60px)',opacity:0.07,transform:'scale(1.1)'}}/>}
                 <div style={{maxWidth:900,width:'100%',display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:isMobile?'2rem':'5rem',alignItems:'center',position:'relative',zIndex:1}}>
                   <div style={{aspectRatio:'3/4',position:'relative',overflow:'hidden',background:'linear-gradient(160deg,#1a1a2e,#0f3460 60%,#1c0a00)',borderRadius:2,maxHeight:isMobile?'45vh':'65vh'}}>
@@ -918,20 +952,30 @@ export default function Home() {
   if (view==='gallery') {
     const displayPhotos = getDisplayPhotos()
     const seriesData = series.map(ser=>({...ser,photos:photos.filter(p=>(ser.photoIds||[]).includes(p.id))}))
+    const [gridMode, setGridMode] = useState('masonry') // masonry | grid
     return (
-      <div style={{minHeight:'100vh',background:BG,color:TXT,fontFamily:"'Jost',sans-serif",fontWeight:300,overflowY:'auto'}}>
+      <div style={{minHeight:'100vh',background:BG_T,color:TXT_T,fontFamily:"'Jost',sans-serif",fontWeight:300,overflowY:'auto'}}>
+        <style>{`
+          @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+          .gallery-item { animation: fadeUp 0.5s ease forwards; }
+        `}</style>
         <Nav solid={true}/>
         <div style={{paddingTop:isMobile?56:80}}>
           <div style={{padding:isMobile?'1rem 1rem 0':'2rem 3rem 0',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'2.2rem',fontWeight:300}}>Галерея</div>
-            <div style={{display:'flex',gap:8}}>
-              {isAdmin&&galleryTab==='all'&&<button style={{fontSize:'0.65rem',padding:'6px 16px',borderRadius:2,border:'none',background:C,color:BG,cursor:'pointer',letterSpacing:'0.12em',textTransform:'uppercase'}} onClick={()=>setShowCatManager(true)}>⚙ Темы</button>}
-              {isAdmin&&galleryTab==='series'&&<button style={{fontSize:'0.65rem',padding:'6px 16px',borderRadius:2,border:'none',background:C,color:BG,cursor:'pointer',letterSpacing:'0.12em',textTransform:'uppercase'}} onClick={()=>{setEditingSeries(null);setShowSeriesEdit(true)}}>+ Серия</button>}
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'2.2rem',fontWeight:300,color:TXT_T}}>Галерея</div>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              {/* Переключатель темы */}
+              <button onClick={()=>setTheme(t=>t==='warm'?'cool':'warm')}
+                style={{fontSize:'0.62rem',padding:'6px 14px',borderRadius:999,border:`1px solid ${ACCENT}55`,background:'transparent',color:ACCENT,cursor:'pointer',letterSpacing:'0.12em'}}>
+                {theme==='warm'?'☀ Тёплая':'❄ Холодная'}
+              </button>
+              {isAdmin&&galleryTab==='all'&&<button style={{fontSize:'0.65rem',padding:'6px 16px',borderRadius:2,border:'none',background:ACCENT,color:BG_T,cursor:'pointer',letterSpacing:'0.12em',textTransform:'uppercase'}} onClick={()=>setShowCatManager(true)}>⚙ Темы</button>}
+              {isAdmin&&galleryTab==='series'&&<button style={{fontSize:'0.65rem',padding:'6px 16px',borderRadius:2,border:'none',background:ACCENT,color:BG_T,cursor:'pointer',letterSpacing:'0.12em',textTransform:'uppercase'}} onClick={()=>{setEditingSeries(null);setShowSeriesEdit(true)}}>+ Серия</button>}
             </div>
           </div>
-          <div style={{padding:isMobile?'0.75rem 1rem 0':'1.25rem 3rem 0',display:'flex',borderBottom:'1px solid rgba(232,226,217,0.08)'}}>
+          <div style={{padding:isMobile?'0.75rem 1rem 0':'1.25rem 3rem 0',display:'flex',borderBottom:`1px solid rgba(232,226,217,0.08)`}}>
             {[['all','Все фото'],['cats','Категории'],['series','Серии']].map(([tab,label])=>(
-              <button key={tab} onClick={()=>{setGalleryTab(tab);setActiveSeries(null)}} style={{padding:'10px 24px',fontSize:'0.72rem',letterSpacing:'0.15em',textTransform:'uppercase',background:'transparent',border:'none',borderBottom:galleryTab===tab?`2px solid ${C}`:'2px solid transparent',color:galleryTab===tab?TXT:MUT,cursor:'pointer',marginBottom:-1}}>{label}</button>
+              <button key={tab} onClick={()=>{setGalleryTab(tab);setActiveSeries(null)}} style={{padding:'10px 24px',fontSize:'0.72rem',letterSpacing:'0.15em',textTransform:'uppercase',background:'transparent',border:'none',borderBottom:galleryTab===tab?`2px solid ${ACCENT}`:'2px solid transparent',color:galleryTab===tab?TXT_T:MUT_T,cursor:'pointer',marginBottom:-1}}>{label}</button>
             ))}
           </div>
           {galleryTab==='all'&&(
@@ -939,19 +983,26 @@ export default function Home() {
               <div style={{padding:'1rem 3rem',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
                 <div style={{position:'relative'}}>
                   <span style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',opacity:0.4,fontSize:13}}>🔍</span>
-                  <input style={{padding:'6px 10px 6px 32px',fontSize:13,border:'0.5px solid rgba(232,226,217,0.2)',borderRadius:6,background:'rgba(255,255,255,0.05)',color:TXT,outline:'none',width:200}} placeholder="Поиск..." value={search} onChange={e=>setSearch(e.target.value)}/>
+                  <input style={{padding:'6px 10px 6px 32px',fontSize:13,border:`0.5px solid rgba(232,226,217,0.2)`,borderRadius:6,background:'rgba(255,255,255,0.05)',color:TXT_T,outline:'none',width:200}} placeholder="Поиск..." value={search} onChange={e=>setSearch(e.target.value)}/>
                 </div>
                 {['Все',...cats].map(cat=>(
-                  <button key={cat} onClick={()=>setFilterCat(cat)} style={{fontSize:'0.65rem',padding:'5px 13px',borderRadius:999,border:filterCat===cat?'none':'1px solid rgba(232,226,217,0.2)',cursor:'pointer',background:filterCat===cat?C:'transparent',color:filterCat===cat?BG:MUT,letterSpacing:'0.15em',textTransform:'uppercase'}}>{cat}</button>
+                  <button key={cat} onClick={()=>setFilterCat(cat)} style={{fontSize:'0.65rem',padding:'5px 13px',borderRadius:999,border:filterCat===cat?'none':`1px solid rgba(232,226,217,0.2)`,cursor:'pointer',background:filterCat===cat?ACCENT:'transparent',color:filterCat===cat?BG_T:MUT_T,letterSpacing:'0.15em',textTransform:'uppercase'}}>{cat}</button>
                 ))}
                 <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+                  {/* Переключатель вида сетки */}
+                  <button onClick={()=>setGridMode(m=>m==='masonry'?'grid':'masonry')}
+                    style={{fontSize:'0.65rem',padding:'5px 12px',borderRadius:6,border:`1px solid ${ACCENT}55`,cursor:'pointer',background:'transparent',color:ACCENT,letterSpacing:'0.1em'}}>
+                    {gridMode==='masonry'?'⊞ Сетка':'⊟ Masonry'}
+                  </button>
                   {[['new','Новые'],['old','Старые'],['popular','Популярные']].map(([m,l])=>(
-                    <button key={m} onClick={()=>setSortMode(m)} style={{fontSize:'0.65rem',padding:'5px 12px',borderRadius:6,border:sortMode===m?`1px solid ${C}`:'1px solid rgba(232,226,217,0.2)',cursor:'pointer',background:'transparent',color:sortMode===m?C:MUT}}>{l}</button>
+                    <button key={m} onClick={()=>setSortMode(m)} style={{fontSize:'0.65rem',padding:'5px 12px',borderRadius:6,border:sortMode===m?`1px solid ${ACCENT}`:`1px solid rgba(232,226,217,0.2)`,cursor:'pointer',background:'transparent',color:sortMode===m?ACCENT:MUT_T}}>{l}</button>
                   ))}
                 </div>
               </div>
-              <div style={{fontSize:'0.7rem',color:MUT,padding:isMobile?'0 1rem 0.5rem':'0 3rem 0.5rem'}}>{displayPhotos.length} фото</div>
-              <div style={{padding:isMobile?'0 1rem 4rem':'0 3rem 4rem'}}><PhotoGrid list={displayPhotos}/></div>
+              <div style={{fontSize:'0.7rem',color:MUT_T,padding:isMobile?'0 1rem 0.5rem':'0 3rem 0.5rem'}}>{displayPhotos.length} фото</div>
+              <div style={{padding:isMobile?'0 1rem 4rem':'0 3rem 4rem'}}>
+                {gridMode==='masonry' ? <MasonryGrid list={displayPhotos}/> : <PhotoGrid list={displayPhotos}/>}
+              </div>
             </div>
           )}
           {galleryTab==='cats'&&(
