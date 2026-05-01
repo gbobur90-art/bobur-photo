@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const DEFAULT_CATS = ['Путешествия', 'Природа', 'Архитектура', 'Улица', 'Портрет']
+const DEFAULT_CATS = ['Путешествия', 'Природа', 'Архитектура', 'Улица', 'Портрет', 'Еда', 'Спорт', 'Животные', 'Закат', 'Черно-белое']
 const MONTHS_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
 const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -22,6 +22,11 @@ const CAT_TRANSLATE = {
   'Архитектура': 'Architecture',
   'Улица': 'Street',
   'Портрет': 'Portrait',
+  'Еда': 'Food',
+  'Спорт': 'Sport',
+  'Животные': 'Animals',
+  'Закат': 'Sunset',
+  'Черно-белое': 'Black & White',
 }
 
 // ── i18n словарь ──
@@ -373,6 +378,63 @@ export default function Home() {
     if (lang === 'en' && CAT_TRANSLATE[cat]) return CAT_TRANSLATE[cat]
     return cat
   }
+
+  // ── Кэш переводов фото ──
+  const [translationCache, setTranslationCache] = useState({}) // { photoId: {title, desc} }
+  const [translating, setTranslating] = useState(false)
+
+  // Получить перевод фото (из кэша или запросить)
+  function getTranslated(p) {
+    if (lang === 'ru') return { title: p.title, desc: p.desc }
+    const cached = translationCache[p.id]
+    if (cached) return cached
+    return { title: p.title, desc: p.desc } // пока переводим — показываем оригинал
+  }
+
+  // Перевод батча фото через Anthropic API
+  async function translateAllPhotos(photosArr) {
+    if (!photosArr.length) return
+    setTranslating(true)
+    try {
+      // Берём только непереведённые
+      const toTranslate = photosArr.filter(p => !translationCache[p.id] && (p.title || p.desc))
+      if (!toTranslate.length) { setTranslating(false); return }
+
+      // Батч по 10 штук
+      for (let i = 0; i < toTranslate.length; i += 10) {
+        const batch = toTranslate.slice(i, i + 10)
+        const prompt = `Translate these photo titles and descriptions from Russian to English. Return ONLY valid JSON array, no markdown, no explanation.
+Input: ${JSON.stringify(batch.map(p => ({ id: p.id, title: p.title || '', desc: p.desc || '' })))}
+Output format: [{"id":"...","title":"...","desc":"..."}]`
+
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            messages: [{ role: 'user', content: prompt }]
+          })
+        })
+        const data = await res.json()
+        const text = data.content?.find(b => b.type === 'text')?.text || '[]'
+        try {
+          const translated = JSON.parse(text.replace(/```json|```/g, '').trim())
+          const newCache = {}
+          translated.forEach(item => { newCache[item.id] = { title: item.title, desc: item.desc } })
+          setTranslationCache(prev => ({ ...prev, ...newCache }))
+        } catch {}
+      }
+    } catch(e) { console.error('Translation error:', e) }
+    setTranslating(false)
+  }
+
+  // Запускаем перевод при переключении на EN
+  useEffect(() => {
+    if (lang === 'en' && photos.length > 0) {
+      translateAllPhotos(photos)
+    }
+  }, [lang, photos.length])
 
   // Preloader
   useEffect(() => {
@@ -742,13 +804,16 @@ export default function Home() {
 
   // ── Переключатель языка ──
   const LangSwitcher = () => (
-    <div style={{display:'flex',border:'1px solid rgba(232,226,217,0.18)',borderRadius:3,overflow:'hidden',fontSize:'0.65rem'}}>
-      {['ru','en'].map(l => (
-        <button key={l} onClick={()=>switchLang(l)}
-          style={{padding:'4px 10px',background:lang===l?C:'transparent',border:'none',color:lang===l?BG:MUT,cursor:'pointer',fontFamily:"'Jost',sans-serif",fontSize:'0.65rem',letterSpacing:'0.12em',textTransform:'uppercase',transition:'all 0.2s'}}>
-          {l.toUpperCase()}
-        </button>
-      ))}
+    <div style={{display:'flex',alignItems:'center',gap:6}}>
+      {translating&&<span style={{fontSize:'0.55rem',color:C,letterSpacing:'0.1em',opacity:0.8}}>...</span>}
+      <div style={{display:'flex',border:'1px solid rgba(232,226,217,0.18)',borderRadius:3,overflow:'hidden',fontSize:'0.65rem'}}>
+        {['ru','en'].map(l => (
+          <button key={l} onClick={()=>switchLang(l)}
+            style={{padding:'4px 10px',background:lang===l?C:'transparent',border:'none',color:lang===l?BG:MUT,cursor:'pointer',fontFamily:"'Jost',sans-serif",fontSize:'0.65rem',letterSpacing:'0.12em',textTransform:'uppercase',transition:'all 0.2s'}}>
+            {l.toUpperCase()}
+          </button>
+        ))}
+      </div>
     </div>
   )
 
@@ -789,19 +854,20 @@ export default function Home() {
 
   const PhotoCard = ({p}) => {
     const liked = isLiked(p.id); const lc = likes[p.id]||0; const vc = views[p.id]||0
+    const tr = getTranslated(p)
     return (
       <div style={{position:'relative',aspectRatio:'3/2',overflow:'hidden',cursor:'zoom-in',background:'#111'}}
         onMouseEnter={e=>{e.currentTarget.querySelector('.ov').style.background='rgba(0,0,0,0.5)';e.currentTarget.querySelectorAll('.rv').forEach(el=>{el.style.opacity='1';el.style.transform='translateY(0)'})}}
         onMouseLeave={e=>{e.currentTarget.querySelector('.ov').style.background='rgba(0,0,0,0)';e.currentTarget.querySelectorAll('.rv').forEach(el=>{el.style.opacity='0';el.style.transform='translateY(8px)'})}}
         onClick={()=>{incrementView(p.id);setLightbox(p)}}>
-        {p.url?<img src={p.url} alt={p.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none',userSelect:'none'}} draggable={false}/>:<div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}/>}
+        {p.url?<img src={p.url} alt={tr.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none',userSelect:'none'}} draggable={false}/>:<div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}/>}
         <div style={{position:'absolute',top:8,right:8,display:'flex',gap:5,zIndex:2}}>
           {vc>0&&<div style={{background:'rgba(10,10,10,0.7)',backdropFilter:'blur(4px)',borderRadius:999,padding:'3px 8px',fontSize:'0.6rem',color:MUT,display:'flex',alignItems:'center',gap:3}}>👁 {vc}</div>}
           {lc>0&&<div style={{background:'rgba(10,10,10,0.75)',backdropFilter:'blur(4px)',border:'1px solid rgba(226,75,74,0.4)',borderRadius:999,padding:'3px 8px',fontSize:'0.65rem',color:'#E24B4A',display:'flex',alignItems:'center',gap:4}}>♥ {lc}</div>}
         </div>
         <div className="ov" style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'1rem',background:'rgba(0,0,0,0)',transition:'background 0.3s',zIndex:1}}>
           <div className="rv" style={{fontSize:'0.6rem',letterSpacing:'0.22em',textTransform:'uppercase',color:C,marginBottom:3,opacity:0,transform:'translateY(8px)',transition:'all 0.3s'}}>{catLabel(p.cat)}</div>
-          <div className="rv" style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1rem',fontWeight:300,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.04s'}}>{p.title}</div>
+          <div className="rv" style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1rem',fontWeight:300,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.04s'}}>{tr.title}</div>
           <div className="rv" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:6,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.08s'}}>
             <div style={{display:'flex',gap:5}}>
               <button onClick={e=>{e.stopPropagation();setDlPhoto(p);setShowDlModal(true)}} style={{fontSize:'0.6rem',letterSpacing:'0.15em',textTransform:'uppercase',padding:'5px 10px',borderRadius:2,border:'1px solid rgba(232,226,217,0.3)',background:'rgba(10,10,10,0.6)',color:TXT,cursor:'pointer'}}>✉</button>
@@ -849,6 +915,7 @@ export default function Home() {
     const liked = isLiked(lightbox.id); const lc = likes[lightbox.id]||0; const vc = views[lightbox.id]||0
     const prev = arr[(idx-1+arr.length)%arr.length]; const next = arr[(idx+1)%arr.length]
     const currentSer = series.find(s=>(s.photoIds||[]).includes(lightbox.id))
+    const tr = getTranslated(lightbox)
     return (
       <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <div style={{position:'absolute',top:0,left:0,right:0,height:60,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 1.5rem',background:'linear-gradient(to bottom,rgba(0,0,0,0.7),transparent)',zIndex:2}}>
@@ -865,11 +932,11 @@ export default function Home() {
         </div>
         {arr.length>1&&<button onClick={()=>setLightbox(prev)} style={{position:'absolute',left:16,top:'50%',transform:'translateY(-50%)',width:52,height:52,borderRadius:'50%',border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(4px)',color:TXT,fontSize:'1.3rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:2}}>←</button>}
         {arr.length>1&&<button onClick={()=>setLightbox(next)} style={{position:'absolute',right:16,top:'50%',transform:'translateY(-50%)',width:52,height:52,borderRadius:'50%',border:'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(4px)',color:TXT,fontSize:'1.3rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:2}}>→</button>}
-        <img src={lightbox.url} alt={lightbox.title} draggable={false} style={{maxWidth:'calc(100vw - 140px)',maxHeight:'calc(100vh - 160px)',width:'auto',height:'auto',objectFit:'contain',pointerEvents:'none',userSelect:'none',borderRadius:2}}/>
+        <img src={lightbox.url} alt={tr.title} draggable={false} style={{maxWidth:'calc(100vw - 140px)',maxHeight:'calc(100vh - 160px)',width:'auto',height:'auto',objectFit:'contain',pointerEvents:'none',userSelect:'none',borderRadius:2}}/>
         <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'1.5rem 2rem',background:'linear-gradient(to top,rgba(0,0,0,0.85),transparent)',display:'flex',alignItems:'flex-end',justifyContent:'space-between',zIndex:2,flexWrap:'wrap',gap:8}}>
           <div>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.5rem',fontWeight:300,marginBottom:4}}>{lightbox.title}</div>
-            {lightbox.desc&&<div style={{fontSize:'0.8rem',color:MUT,maxWidth:600}}>{lightbox.desc}</div>}
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.5rem',fontWeight:300,marginBottom:4}}>{tr.title}</div>
+            {tr.desc&&<div style={{fontSize:'0.8rem',color:MUT,maxWidth:600}}>{tr.desc}</div>}
           </div>
           <div style={{display:'flex',gap:8,flexShrink:0,flexWrap:'wrap'}}>
             <button onClick={e=>toggleLike(lightbox.id,e)} style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.75rem',padding:'8px 14px',borderRadius:2,border:liked?'1px solid rgba(226,75,74,0.5)':'1px solid rgba(232,226,217,0.2)',background:'rgba(0,0,0,0.5)',color:liked?'#E24B4A':MUT,cursor:'pointer'}}>{liked?'♥':'♡'}{lc>0?` (${lc})`:''}</button>
@@ -1010,23 +1077,23 @@ export default function Home() {
           <section id="sec-0" style={{height:'100vh',scrollSnapAlign:'start',position:'relative',display:'flex',alignItems:'flex-end',overflow:'hidden'}}>
             {slidePhotos.length===0&&<div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}/>}
             {slidePhotos.map((p,i)=>{
-              // Определяем вертикальное фото через натуральные размеры
-              const isPortrait = p.width && p.height ? p.height > p.width : false
               return (
               <div key={p.id} style={{position:'absolute',inset:0,opacity:i===slideIdx?1:0,transition:'opacity 1.2s ease'}}>
-                {/* Размытый фон для вертикальных фото */}
-                <div style={{position:'absolute',inset:0,backgroundImage:`url(${p.url})`,backgroundSize:'cover',backgroundPosition:'center',filter:'blur(40px)',transform:'scale(1.15)',opacity:0.4}}/>
-                {/* Основное фото: contain для вертикальных, cover для горизонтальных */}
-                <div style={{position:'absolute',inset:0,backgroundImage:`url(${p.url})`,backgroundSize:isPortrait?'contain':'cover',backgroundPosition:'center',backgroundRepeat:'no-repeat'}}/>
-                <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%)'}}/>
-                <div style={{position:'absolute',bottom:0,left:0,right:0,height:'55%',background:'linear-gradient(to top,rgba(0,0,0,0.9),transparent)'}}/>
+                {/* Размытый фон — всегда cover */}
+                <div style={{position:'absolute',inset:0,backgroundImage:`url(${p.url})`,backgroundSize:'cover',backgroundPosition:'center',filter:'blur(28px)',transform:'scale(1.12)',opacity:0.55}}/>
+                {/* Тёмный оверлей поверх размытия */}
+                <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.45)'}}/>
+                {/* Основное фото — всегда целиком (contain) */}
+                <div style={{position:'absolute',inset:0,backgroundImage:`url(${p.url})`,backgroundSize:'contain',backgroundPosition:'center',backgroundRepeat:'no-repeat'}}/>
+                {/* Градиент снизу для читаемости текста */}
+                <div style={{position:'absolute',bottom:0,left:0,right:0,height:'55%',background:'linear-gradient(to top,rgba(0,0,0,0.92),transparent)'}}/>
               </div>
               )
             })}
             <div style={{position:'relative',zIndex:2,padding:isMobile?'0 1.5rem 5rem':'0 3rem 5rem',width:'100%'}}>
               {slidePhotos.length>0&&<div style={{fontSize:'0.65rem',letterSpacing:'0.25em',textTransform:'uppercase',color:C,marginBottom:'0.6rem'}}>{catLabel(slidePhotos[slideIdx]?.cat)}</div>}
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'clamp(2rem,5vw,4.5rem)',fontWeight:300,lineHeight:1.05}}>
-                {slidePhotos.length>0?slidePhotos[slideIdx]?.title:'Bobur Gafurov'}
+                {slidePhotos.length>0 ? getTranslated(slidePhotos[slideIdx])?.title || slidePhotos[slideIdx]?.title : 'Bobur Gafurov'}
               </div>
               {slidePhotos.length>0&&<div style={{fontSize:'0.7rem',color:MUT,letterSpacing:'0.15em',marginTop:'0.75rem'}}>{fmtDate(slidePhotos[slideIdx]?.date, lang)}</div>}
             </div>
@@ -1126,24 +1193,24 @@ export default function Home() {
           {activeCats.length>0&&(()=>{
             const secIdx = hasSeriesSection ? 3 : 2
             return (
-              <section id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
-                <div style={{position:'relative',zIndex:1}}>
-                  <div style={{marginBottom:'2rem'}}>
-                    <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>{t.categories_label} · {activeCats.length} {t.categories_count}</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2.5rem':'4rem',fontWeight:300,lineHeight:1}}>{t.cats_tab}</div>
+              <section id={`sec-${secIdx}`} style={{height:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'3rem 3rem 2rem',position:'relative',overflow:'hidden'}}>
+                <div style={{position:'relative',zIndex:1,height:'100%',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                  <div style={{marginBottom:isMobile?'1.5rem':'1.2rem'}}>
+                    <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:8,opacity:0.8}}>{t.categories_label} · {activeCats.length} {t.categories_count}</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2rem':'2.8rem',fontWeight:300,lineHeight:1}}>{t.cats_tab}</div>
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(3,1fr)':'repeat(auto-fill,minmax(130px,1fr))',gap:isMobile?'0.6rem':'0.75rem'}}>
+                  <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(3,1fr)':`repeat(auto-fill,minmax(${Math.min(200, Math.floor((window?.innerWidth||1200 - 240) / Math.ceil(activeCats.length <= 4 ? activeCats.length : activeCats.length <= 6 ? 3 : 4)))}px,1fr))`,gap:isMobile?'0.6rem':'1rem',flex:1,alignContent:'start'}}>
                     {activeCats.map(cat=>{
                       const catPhotos = photos.filter(p=>p.cat===cat)
                       const cover = catPhotos[0]?.url
                       return (
                         <div key={cat} onClick={()=>{setFilterCat(cat);setView('gallery');setGalleryTab('all')}}
                           className="icon-thumb"
-                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
+                          style={{position:'relative',borderRadius:4,overflow:'hidden',cursor:'pointer',aspectRatio:'4/3',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
                           {cover&&<img src={cover} alt={cat} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
-                          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.5rem 0.6rem'}}>
-                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{catLabel(cat)}</div>
-                            <div style={{fontSize:'0.55rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:2,opacity:0.9}}>{catPhotos.length} {t.photos}</div>
+                          <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,0.7) 0%,transparent 55%)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:isMobile?'0.5rem 0.6rem':'0.8rem 1rem'}}>
+                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.8rem':'1rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{catLabel(cat)}</div>
+                            <div style={{fontSize:'0.6rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:3,opacity:0.9}}>{catPhotos.length} {t.photos}</div>
                           </div>
                         </div>
                       )
