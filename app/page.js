@@ -15,6 +15,15 @@ function fmtDate(d, lang='ru') {
 }
 function shuffle(arr) { const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}; return a }
 
+// Перевод стандартных категорий RU → EN
+const CAT_TRANSLATE = {
+  'Путешествия': 'Travel',
+  'Природа': 'Nature',
+  'Архитектура': 'Architecture',
+  'Улица': 'Street',
+  'Портрет': 'Portrait',
+}
+
 // ── i18n словарь ──
 const T = {
   ru: {
@@ -357,6 +366,12 @@ export default function Home() {
   function switchLang(l) {
     setLang(l)
     try { localStorage.setItem('lang', l) } catch {}
+  }
+
+  // Перевод названия категории для отображения
+  function catLabel(cat) {
+    if (lang === 'en' && CAT_TRANSLATE[cat]) return CAT_TRANSLATE[cat]
+    return cat
   }
 
   // Preloader
@@ -785,7 +800,7 @@ export default function Home() {
           {lc>0&&<div style={{background:'rgba(10,10,10,0.75)',backdropFilter:'blur(4px)',border:'1px solid rgba(226,75,74,0.4)',borderRadius:999,padding:'3px 8px',fontSize:'0.65rem',color:'#E24B4A',display:'flex',alignItems:'center',gap:4}}>♥ {lc}</div>}
         </div>
         <div className="ov" style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'1rem',background:'rgba(0,0,0,0)',transition:'background 0.3s',zIndex:1}}>
-          <div className="rv" style={{fontSize:'0.6rem',letterSpacing:'0.22em',textTransform:'uppercase',color:C,marginBottom:3,opacity:0,transform:'translateY(8px)',transition:'all 0.3s'}}>{p.cat}</div>
+          <div className="rv" style={{fontSize:'0.6rem',letterSpacing:'0.22em',textTransform:'uppercase',color:C,marginBottom:3,opacity:0,transform:'translateY(8px)',transition:'all 0.3s'}}>{catLabel(p.cat)}</div>
           <div className="rv" style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1rem',fontWeight:300,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.04s'}}>{p.title}</div>
           <div className="rv" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:6,opacity:0,transform:'translateY(8px)',transition:'all 0.3s 0.08s'}}>
             <div style={{display:'flex',gap:5}}>
@@ -838,7 +853,7 @@ export default function Home() {
       <div style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(0,0,0,0.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
         <div style={{position:'absolute',top:0,left:0,right:0,height:60,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 1.5rem',background:'linear-gradient(to bottom,rgba(0,0,0,0.7),transparent)',zIndex:2}}>
           <div style={{display:'flex',alignItems:'center',gap:16}}>
-            <span style={{fontSize:'0.65rem',letterSpacing:'0.2em',textTransform:'uppercase',color:C}}>{lightbox.cat}</span>
+            <span style={{fontSize:'0.65rem',letterSpacing:'0.2em',textTransform:'uppercase',color:C}}>{catLabel(lightbox.cat)}</span>
             <span style={{fontSize:'0.65rem',color:MUT}}>{fmtDate(lightbox.date, lang)}</span>
             {lightbox.location&&<span style={{fontSize:'0.65rem',color:MUT}}>📍 {lightbox.location}</span>}
             {vc>0&&<span style={{fontSize:'0.65rem',color:MUT}}>👁 {vc}</span>}
@@ -938,7 +953,7 @@ export default function Home() {
                 {cats.map(cat => (
                   <button key={cat} onClick={()=>setHomeSearch('#'+cat.toLowerCase())}
                     style={{padding:'3px 10px',borderRadius:999,border:'1px solid rgba(232,226,217,0.15)',background:'rgba(200,169,110,0.08)',color:C,fontSize:'0.65rem',letterSpacing:'0.1em',cursor:'pointer',fontFamily:"'Jost',sans-serif"}}>
-                    #{cat.toLowerCase()}
+                    #{catLabel(cat).toLowerCase()}
                   </button>
                 ))}
               </div>
@@ -957,7 +972,7 @@ export default function Home() {
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1rem',fontWeight:300,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{p.title}</div>
-                          <div style={{fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C,marginTop:2}}>{p.cat}{p.location?` · ${p.location}`:''}</div>
+                          <div style={{fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C,marginTop:2}}>{catLabel(p.cat)}{p.location?` · ${p.location}`:''}</div>
                         </div>
                       </div>
                     ))}
@@ -994,15 +1009,22 @@ export default function Home() {
           {/* ── Секция 0: Слайдер ── */}
           <section id="sec-0" style={{height:'100vh',scrollSnapAlign:'start',position:'relative',display:'flex',alignItems:'flex-end',overflow:'hidden'}}>
             {slidePhotos.length===0&&<div style={{position:'absolute',inset:0,background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}/>}
-            {slidePhotos.map((p,i)=>(
+            {slidePhotos.map((p,i)=>{
+              // Определяем вертикальное фото через натуральные размеры
+              const isPortrait = p.width && p.height ? p.height > p.width : false
+              return (
               <div key={p.id} style={{position:'absolute',inset:0,opacity:i===slideIdx?1:0,transition:'opacity 1.2s ease'}}>
-                <div style={{position:'absolute',inset:0,backgroundImage:`url(${p.url})`,backgroundSize:'cover',backgroundPosition:'center'}}/>
+                {/* Размытый фон для вертикальных фото */}
+                <div style={{position:'absolute',inset:0,backgroundImage:`url(${p.url})`,backgroundSize:'cover',backgroundPosition:'center',filter:'blur(40px)',transform:'scale(1.15)',opacity:0.4}}/>
+                {/* Основное фото: contain для вертикальных, cover для горизонтальных */}
+                <div style={{position:'absolute',inset:0,backgroundImage:`url(${p.url})`,backgroundSize:isPortrait?'contain':'cover',backgroundPosition:'center',backgroundRepeat:'no-repeat'}}/>
                 <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,0.6) 100%)'}}/>
                 <div style={{position:'absolute',bottom:0,left:0,right:0,height:'55%',background:'linear-gradient(to top,rgba(0,0,0,0.9),transparent)'}}/>
               </div>
-            ))}
+              )
+            })}
             <div style={{position:'relative',zIndex:2,padding:isMobile?'0 1.5rem 5rem':'0 3rem 5rem',width:'100%'}}>
-              {slidePhotos.length>0&&<div style={{fontSize:'0.65rem',letterSpacing:'0.25em',textTransform:'uppercase',color:C,marginBottom:'0.6rem'}}>{slidePhotos[slideIdx]?.cat}</div>}
+              {slidePhotos.length>0&&<div style={{fontSize:'0.65rem',letterSpacing:'0.25em',textTransform:'uppercase',color:C,marginBottom:'0.6rem'}}>{catLabel(slidePhotos[slideIdx]?.cat)}</div>}
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'clamp(2rem,5vw,4.5rem)',fontWeight:300,lineHeight:1.05}}>
                 {slidePhotos.length>0?slidePhotos[slideIdx]?.title:'Bobur Gafurov'}
               </div>
@@ -1073,23 +1095,23 @@ export default function Home() {
           {hasSeriesSection&&(()=>{
             const secIdx = 2
             return (
-              <section id={`sec-${secIdx}`} style={{minHeight:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'5rem 3rem 3rem',position:'relative'}}>
-                <div style={{position:'relative',zIndex:1}}>
-                  <div style={{marginBottom:'2rem'}}>
-                    <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:10,opacity:0.8}}>{t.about_collections} · {seriesData.length} {t.series}</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2.5rem':'4rem',fontWeight:300,lineHeight:1}}>{t.series_tab}</div>
+              <section id={`sec-${secIdx}`} style={{height:'100vh',scrollSnapAlign:'start',display:'flex',flexDirection:'column',justifyContent:'center',padding:isMobile?'5rem 1rem 3rem':'3rem 3rem 2rem',position:'relative',overflow:'hidden'}}>
+                <div style={{position:'relative',zIndex:1,height:'100%',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                  <div style={{marginBottom:isMobile?'1.5rem':'1.2rem'}}>
+                    <div style={{fontSize:'0.58rem',letterSpacing:'0.28em',textTransform:'uppercase',color:C,marginBottom:8,opacity:0.8}}>{t.about_collections} · {seriesData.length} {t.series}</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'2rem':'2.8rem',fontWeight:300,lineHeight:1}}>{t.series_tab}</div>
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(3,1fr)':'repeat(auto-fill,minmax(130px,1fr))',gap:isMobile?'0.6rem':'0.75rem'}}>
+                  <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(3,1fr)':`repeat(auto-fill,minmax(${Math.min(200, Math.floor((window?.innerWidth||1200 - 240) / Math.ceil(seriesData.length <= 4 ? seriesData.length : seriesData.length <= 6 ? 3 : 4)))}px,1fr))`,gap:isMobile?'0.6rem':'1rem',flex:1,alignContent:'start'}}>
                     {seriesData.map(ser=>{
                       const cover=ser.cover||ser.photos?.[0]?.url
                       return (
                         <div key={ser.id} onClick={()=>{setView('gallery');setGalleryTab('series');setActiveSeries(ser)}}
                           className="icon-thumb"
-                          style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
+                          style={{position:'relative',borderRadius:4,overflow:'hidden',cursor:'pointer',aspectRatio:'4/3',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
                           {cover&&<img src={cover} alt={ser.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
-                          <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.5rem 0.6rem'}}>
-                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{ser.title}</div>
-                            <div style={{fontSize:'0.55rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:2,opacity:0.9}}>{ser.photos?.length||0} {t.photos}</div>
+                          <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,0.7) 0%,transparent 55%)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:isMobile?'0.5rem 0.6rem':'0.8rem 1rem'}}>
+                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.8rem':'1rem',fontWeight:300,lineHeight:1.2,color:TXT,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ser.title}</div>
+                            <div style={{fontSize:'0.6rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:3,opacity:0.9}}>{ser.photos?.length||0} {t.photos}</div>
                           </div>
                         </div>
                       )
@@ -1120,7 +1142,7 @@ export default function Home() {
                           style={{position:'relative',borderRadius:3,overflow:'hidden',cursor:'pointer',aspectRatio:'1',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
                           {cover&&<img src={cover} alt={cat} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
                           <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'0.5rem 0.6rem'}}>
-                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{cat}</div>
+                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.75rem':'0.85rem',fontWeight:300,lineHeight:1.2,color:TXT,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{catLabel(cat)}</div>
                             <div style={{fontSize:'0.55rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:2,opacity:0.9}}>{catPhotos.length} {t.photos}</div>
                           </div>
                         </div>
@@ -1180,7 +1202,7 @@ export default function Home() {
                     <button key={cat}
                       onClick={()=>setSearch(search==='#'+cat.toLowerCase()?'':'#'+cat.toLowerCase())}
                       style={{padding:'3px 10px',borderRadius:999,border:'1px solid rgba(232,226,217,0.15)',background:search==='#'+cat.toLowerCase()?'rgba(200,169,110,0.2)':'transparent',color:search==='#'+cat.toLowerCase()?C:MUT,fontSize:'0.62rem',letterSpacing:'0.1em',cursor:'pointer',fontFamily:"'Jost',sans-serif"}}>
-                      #{cat.toLowerCase()}
+                      #{catLabel(cat).toLowerCase()}
                     </button>
                   ))}
                 </div>
@@ -1203,7 +1225,7 @@ export default function Home() {
                 return (
                   <div key={cat} style={{marginBottom:'3rem'}}>
                     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
-                      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.6rem',fontWeight:300}}>{cat}</div>
+                      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.6rem',fontWeight:300}}>{catLabel(cat)}</div>
                       <span style={{fontSize:'0.65rem',letterSpacing:'0.18em',textTransform:'uppercase',color:C}}>{cp.length} {t.photos}</span>
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:'2px'}}>{cp.slice(0,6).map(p=><PhotoCard key={p.id} p={p}/>)}</div>
