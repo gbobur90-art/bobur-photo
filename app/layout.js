@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Bobur Gafurov — Фотодневник',
-  description: 'Фотографии Бобура Гафурова — путешествия, природа, архитектура',
+  title: 'Bobur Gafurov — Photo Diary',
+  description: 'Photography by Bobur Gafurov — travel, nature, architecture',
 }
 
 export default function RootLayout({ children }) {
