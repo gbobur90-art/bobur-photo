@@ -379,51 +379,81 @@ export default function Home() {
     return cat
   }
 
-  // ── Кэш переводов фото ──
-  const [translationCache, setTranslationCache] = useState({}) // { photoId: {title, desc} }
+  // ── Кэш всех переводов: фото + серии + bio ──
+  const [tcPhotos, setTcPhotos] = useState({})
+  const [tcSeries, setTcSeries] = useState({})
+  const [tcBio, setTcBio] = useState('')
   const [translating, setTranslating] = useState(false)
 
-  // Получить перевод фото (из кэша или запросить)
   function getTranslated(p) {
+    if (!p) return { title: '', desc: '' }
     if (lang === 'ru') return { title: p.title, desc: p.desc }
-    const cached = translationCache[p.id]
-    if (cached) return cached
-    return { title: p.title, desc: p.desc } // пока переводим — показываем оригинал
+    return tcPhotos[p.id] || { title: p.title, desc: p.desc }
   }
 
-  // Перевод батча фото через Anthropic API
-  async function translateAllPhotos(photosArr) {
-    if (!photosArr.length) return
+  function getSeriesTranslated(ser) {
+    if (!ser) return { title: '', desc: '' }
+    if (lang === 'ru') return { title: ser.title, desc: ser.desc }
+    return tcSeries[ser.id] || { title: ser.title, desc: ser.desc }
+  }
+
+  function getBioTranslated() {
+    if (lang === 'ru') return about.bio
+    return tcBio || about.bio
+  }
+
+  async function aiCall(prompt) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    })
+    const data = await res.json()
+    return data.content?.find(b => b.type === 'text')?.text || ''
+  }
+
+  async function translateAll(photosArr, seriesArr, bioText) {
     setTranslating(true)
     try {
-      // Берём только непереведённые
-      const toTranslate = photosArr.filter(p => !translationCache[p.id] && (p.title || p.desc))
-      if (!toTranslate.length) { setTranslating(false); return }
-
-      // Батч по 10 штук
-      for (let i = 0; i < toTranslate.length; i += 10) {
-        const batch = toTranslate.slice(i, i + 10)
-        const prompt = `Translate these photo titles and descriptions from Russian to English. Return ONLY valid JSON array, no markdown, no explanation.
-Input: ${JSON.stringify(batch.map(p => ({ id: p.id, title: p.title || '', desc: p.desc || '' })))}
-Output format: [{"id":"...","title":"...","desc":"..."}]`
-
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
-            messages: [{ role: 'user', content: prompt }]
-          })
-        })
-        const data = await res.json()
-        const text = data.content?.find(b => b.type === 'text')?.text || '[]'
+      // 1. Фото — батчами по 15
+      const photosToTr = photosArr.filter(p => !tcPhotos[p.id] && (p.title || p.desc))
+      for (let i = 0; i < photosToTr.length; i += 15) {
+        const batch = photosToTr.slice(i, i + 15)
+        const text = await aiCall(
+          `Translate from Russian to English. Return ONLY valid JSON array, no markdown.\nInput: ${JSON.stringify(batch.map(p=>({id:p.id,title:p.title||'',desc:p.desc||''})))}\nOutput: [{"id":"...","title":"...","desc":"..."}]`
+        )
         try {
-          const translated = JSON.parse(text.replace(/```json|```/g, '').trim())
-          const newCache = {}
-          translated.forEach(item => { newCache[item.id] = { title: item.title, desc: item.desc } })
-          setTranslationCache(prev => ({ ...prev, ...newCache }))
+          const arr = JSON.parse(text.replace(/\`\`\`json|\`\`\`/g,'').trim())
+          const patch = {}
+          arr.forEach(x => { patch[x.id] = { title: x.title, desc: x.desc } })
+          setTcPhotos(prev => ({ ...prev, ...patch }))
         } catch {}
+      }
+
+      // 2. Серии — одним батчем
+      const seriesToTr = seriesArr.filter(s => !tcSeries[s.id] && (s.title || s.desc))
+      if (seriesToTr.length > 0) {
+        const text = await aiCall(
+          `Translate from Russian to English. Return ONLY valid JSON array, no markdown.\nInput: ${JSON.stringify(seriesToTr.map(s=>({id:s.id,title:s.title||'',desc:s.desc||''})))}\nOutput: [{"id":"...","title":"...","desc":"..."}]`
+        )
+        try {
+          const arr = JSON.parse(text.replace(/\`\`\`json|\`\`\`/g,'').trim())
+          const patch = {}
+          arr.forEach(x => { patch[x.id] = { title: x.title, desc: x.desc } })
+          setTcSeries(prev => ({ ...prev, ...patch }))
+        } catch {}
+      }
+
+      // 3. Bio
+      if (!tcBio && bioText && bioText.trim()) {
+        const text = await aiCall(
+          `Translate this photographer bio from Russian to English. Return ONLY the translated text, preserve paragraph breaks with \\n\\n:\n\n${bioText}`
+        )
+        if (text.trim()) setTcBio(text.trim())
       }
     } catch(e) { console.error('Translation error:', e) }
     setTranslating(false)
@@ -431,10 +461,11 @@ Output format: [{"id":"...","title":"...","desc":"..."}]`
 
   // Запускаем перевод при переключении на EN
   useEffect(() => {
-    if (lang === 'en' && photos.length > 0) {
-      translateAllPhotos(photos)
+    if (lang === 'en') {
+      translateAll(photos, series, about.bio)
     }
-  }, [lang, photos.length])
+  }, [lang, photos.length, series.length, about.bio])
+
 
   // Preloader
   useEffect(() => {
@@ -1134,7 +1165,7 @@ Output format: [{"id":"...","title":"...","desc":"..."}]`
                 </div>
                 <div style={{width:36,height:1,background:C,marginBottom:'1.25rem',opacity:0.6}}/>
                 <div style={{fontSize:'0.84rem',lineHeight:1.85,color:MUT,marginBottom:'1.5rem'}}>
-                  {about.bio.split('\n\n').map((p,i)=><p key={i} style={{marginTop:i>0?'0.8rem':0}}>{p}</p>)}
+                  {getBioTranslated().split('\n\n').map((p,i)=><p key={i} style={{marginTop:i>0?'0.8rem':0}}>{p}</p>)}
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'1rem',borderTop:'1px solid rgba(232,226,217,0.08)',borderBottom:'1px solid rgba(232,226,217,0.08)',padding:'1rem 0',marginBottom:'1.5rem'}}>
                   {[[photos.length, t.photos_full],[series.length, t.series_full],[Object.values(likes).reduce((a,b)=>a+b,0), t.likes]].map(([num,label])=>(
@@ -1177,7 +1208,7 @@ Output format: [{"id":"...","title":"...","desc":"..."}]`
                           style={{position:'relative',borderRadius:4,overflow:'hidden',cursor:'pointer',aspectRatio:'4/3',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
                           {cover&&<img src={cover} alt={ser.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
                           <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,0.7) 0%,transparent 55%)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:isMobile?'0.5rem 0.6rem':'0.8rem 1rem'}}>
-                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.8rem':'1rem',fontWeight:300,lineHeight:1.2,color:TXT,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ser.title}</div>
+                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:isMobile?'0.8rem':'1rem',fontWeight:300,lineHeight:1.2,color:TXT,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getSeriesTranslated(ser).title}</div>
                             <div style={{fontSize:'0.6rem',letterSpacing:'0.14em',textTransform:'uppercase',color:C,marginTop:3,opacity:0.9}}>{ser.photos?.length||0} {t.photos}</div>
                           </div>
                         </div>
@@ -1308,8 +1339,8 @@ Output format: [{"id":"...","title":"...","desc":"..."}]`
                 <div>
                   <div style={{marginBottom:'1.5rem'}}>
                     <div style={{fontSize:'0.65rem',letterSpacing:'0.2em',textTransform:'uppercase',color:C,marginBottom:8,cursor:'pointer'}} onClick={()=>setActiveSeries(null)}>{t.back_series}</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'2rem',fontWeight:300}}>{activeSeries.title}</div>
-                    {activeSeries.desc&&<div style={{fontSize:'0.85rem',color:MUT,marginTop:6}}>{activeSeries.desc}</div>}
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'2rem',fontWeight:300}}>{getSeriesTranslated(activeSeries).title}</div>
+                    {getSeriesTranslated(activeSeries).desc&&<div style={{fontSize:'0.85rem',color:MUT,marginTop:6}}>{getSeriesTranslated(activeSeries).desc}</div>}
                   </div>
                   {(activeSeries.photos?.length||0)===0?<div style={{color:MUT,padding:'2rem 0'}}>{t.no_photos_series}</div>:<PhotoGrid list={activeSeries.photos||[]}/>}
                 </div>
@@ -1323,9 +1354,9 @@ Output format: [{"id":"...","title":"...","desc":"..."}]`
                         <div key={ser.id} onClick={()=>setActiveSeries(ser)} style={{position:'relative',borderRadius:4,overflow:'hidden',cursor:'pointer',aspectRatio:'4/3',background:'linear-gradient(135deg,#1a1a2e,#0f3460)'}}>
                           {cover&&<img src={cover} alt={ser.title} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} draggable={false}/>}
                           <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,0.8) 0%,transparent 60%)',display:'flex',flexDirection:'column',justifyContent:'flex-end',padding:'1.5rem'}}>
-                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.4rem',fontWeight:300}}>{ser.title}</div>
+                            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'1.4rem',fontWeight:300}}>{getSeriesTranslated(ser).title}</div>
                             <div style={{fontSize:'0.65rem',letterSpacing:'0.18em',textTransform:'uppercase',color:C,marginTop:4}}>{ser.photos?.length||0} {t.photos}</div>
-                            {ser.desc&&<div style={{fontSize:'0.75rem',color:'rgba(232,226,217,0.55)',marginTop:4}}>{ser.desc}</div>}
+                            {getSeriesTranslated(ser).desc&&<div style={{fontSize:'0.75rem',color:'rgba(232,226,217,0.55)',marginTop:4}}>{getSeriesTranslated(ser).desc}</div>}
                           </div>
                           {isAdmin&&<button onClick={e=>{e.stopPropagation();setEditingSeries(ser);setShowSeriesEdit(true)}} style={{position:'absolute',top:10,right:10,background:'rgba(10,10,10,0.7)',border:'1px solid rgba(232,226,217,0.2)',color:TXT,borderRadius:2,padding:'4px 10px',fontSize:'0.65rem',cursor:'pointer'}}>✏</button>}
                         </div>
@@ -1364,7 +1395,7 @@ Output format: [{"id":"...","title":"...","desc":"..."}]`
           </div>
           <div style={{width:40,height:1,background:C,marginBottom:'1.8rem',opacity:0.6}}/>
           <div style={{fontSize:'0.88rem',lineHeight:1.9,color:MUT,marginBottom:'2rem'}}>
-            {about.bio.split('\n\n').map((p,i)=><p key={i} style={{marginTop:i>0?'1rem':0}}>{p}</p>)}
+            {getBioTranslated().split('\n\n').map((p,i)=><p key={i} style={{marginTop:i>0?'1rem':0}}>{p}</p>)}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'1.5rem',borderTop:'1px solid rgba(232,226,217,0.08)',borderBottom:'1px solid rgba(232,226,217,0.08)',padding:'1.5rem 0',marginBottom:'2.5rem'}}>
             {[[photos.length, t.photos_full],[series.length, t.series_full],[Object.values(likes).reduce((a,b)=>a+b,0), t.likes]].map(([num,label])=>(
